@@ -53,7 +53,14 @@ def node_rerank(state: QueryGraphState) -> dict:
     for s in state.get("summaries") or []:
         evidence.append(make("summary", "（文档摘要）" + s["text"], s["doc_id"]))
 
+    # 充分性不依赖精排分，先判断：不充分时直接拒答，省掉一次精排调用
     hits = state.get("embedding_chunks") or []
+    top_dense = state.get("top_dense") or 0.0
+    sufficient = bool(evidence or hits) and (bool(evidence) or bool(state.get("doc_ids")) or top_dense >= TAU)
+    logger.info("facts/summaries=%d hits=%d top_dense=%.3f sufficient=%s", len(evidence), len(hits), top_dense, sufficient)
+    if not sufficient:
+        return {"evidence": [], "kind": "refuse", "answer": templates.REFUSE}
+
     if hits:
         try:
             order = reranker.rerank(plan.standalone_query, [h["text"][:2000] for h in hits], TOP_CHUNKS)
@@ -68,11 +75,4 @@ def node_rerank(state: QueryGraphState) -> dict:
             )
     for i, e in enumerate(evidence, 1):
         e.eid = i
-
-    top_dense = state.get("top_dense") or 0.0
-    has_structured = any(e.kind in ("fact", "summary") for e in evidence)
-    sufficient = bool(evidence) and (has_structured or bool(state.get("doc_ids")) or top_dense >= TAU)
-    logger.info("evidence=%d top_dense=%.3f sufficient=%s", len(evidence), top_dense, sufficient)
-    if not sufficient:
-        return {"evidence": [], "kind": "refuse", "answer": templates.REFUSE}
     return {"evidence": [vars(e) for e in evidence]}

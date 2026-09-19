@@ -28,6 +28,9 @@ class _NodeFilter(logging.Filter):
 def init_logger(level: int = logging.INFO) -> logging.Logger:
     root = logging.getLogger()
     if not root.handlers:
+        # 输出被重定向（服务日志、管道）时 Windows 默认用本地代码页，中文会乱码
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt="%H:%M:%S"))
         handler.addFilter(_NodeFilter())

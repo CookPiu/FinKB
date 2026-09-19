@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -93,10 +94,13 @@ def run_answers(items) -> list[dict]:
     """逐题走完整问答链路（每题一个新会话，多轮题在同一会话内依次提问），按规则打分。"""
     from utils.guard_utils import is_negated, violations
     from processor.query_processor.main_graph import ask
+    from utils.clients.mongo_history_utils import delete_sessions
 
     records: list[dict] = []
+    created: list[str] = []
     for it in items:
-        sid = None
+        sid = f"eval-{uuid.uuid4().hex[:8]}"
+        created.append(sid)
         for ti, turn in enumerate(it.resolved_turns()):
             t0 = time.perf_counter()
             try:
@@ -138,6 +142,7 @@ def run_answers(items) -> list[dict]:
             )
         r = [x for x in records if x["id"] == it.id]
         print(f"  {it.id}: " + ", ".join(f"{x['kind']}{'' if x['behavior_ok'] else '✗'}" for x in r), flush=True)
+    delete_sessions(created)  # 评测会话不留在历史记录里
     return records
 
 

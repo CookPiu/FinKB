@@ -162,9 +162,13 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# FinKB：原始资料与导入产物不入库
+# FinKB：原始资料、上传文件与导入产物不入库
 data/raw/
+data/uploads/
 data/artifacts/
+
+# 本地工具配置
+.claude/
 
 # 文档（含原始资料副本 docs/数据/）与 Claude Code 项目说明不入库
 docs/
