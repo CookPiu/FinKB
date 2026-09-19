@@ -163,7 +163,10 @@ cython_debug/
 #.idea/
 
 # FinKB：原始资料与导入产物不入库
-docs/数据/
 data/raw/
 data/artifacts/
+
+# 文档（含原始资料副本 docs/数据/）与 Claude Code 项目说明不入库
+docs/
+CLAUDE.md
 
