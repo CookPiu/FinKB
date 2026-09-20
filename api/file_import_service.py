@@ -52,7 +52,7 @@ async def upload_documents(background_tasks: BackgroundTasks, files: list[Upload
 def list_documents():
     fields = {"_id": 1, "file_name": 1, "content_type": 1, "status": 1, "chunk_count": 1,
               "page_count": 1, "error": 1, "source_path": 1, "updated_at": 1}
-    docs = get_db().documents.find({"status": {"$ne": "superseded"}}, fields).sort("file_name", 1)
+    docs = get_db().documents.find({}, fields).sort("file_name", 1)
     documents = []
     for doc in docs:
         # 与原实现一致：保留 _id，另加 doc_id

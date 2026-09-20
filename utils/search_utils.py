@@ -116,7 +116,7 @@ def attach_doc_meta(hits: list, top_k: int) -> list:
     results = []
     for hit in hits:
         doc = meta.get(hit["doc_id"])
-        if doc is None or doc.get("version") != hit["version"] or doc.get("status") == "superseded":
+        if doc is None or doc.get("version") != hit["version"]:
             continue
         hit["file_name"] = doc.get("file_name", "")
         hit["document_title"] = doc.get("document_title", "")

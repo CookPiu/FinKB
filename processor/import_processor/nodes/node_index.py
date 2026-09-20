@@ -20,7 +20,7 @@ from utils.clients.milvus_utils import (
 )
 from utils.clients.mongo_utils import get_db
 from utils.lm.embedding_utils import generate_embeddings
-from utils.task_utils import STATUS_SUPERSEDED, save_doc_fields
+from utils.task_utils import save_doc_fields
 
 
 def build_embed_text(doc: dict, chunk: dict) -> str:
@@ -80,15 +80,13 @@ def build_rows(doc: dict, chunks: list, vectors: list) -> list:
     return rows
 
 
-@step_log("retire_superseded")
-def retire_superseded(doc: dict):
-    """删除被本文档替换的旧文档切片，并把旧文档标记为 superseded"""
+@step_log("drop_superseded")
+def drop_superseded(doc: dict):
+    """同名文件内容已变化：新文档入库成功后，删掉旧文档的切片与记录"""
     for old_id in doc["supersedes"]:
         delete_rows(f"doc_id == {quote_str(old_id)}")
-        get_db().documents.update_one(
-            {"_id": old_id}, {"$set": {"status": STATUS_SUPERSEDED, "superseded_by": doc["doc_id"]}}
-        )
-        logger.info(f"旧文档 {old_id} 已被 {doc['file_name']} 替换")
+        get_db().documents.delete_one({"_id": old_id})
+        logger.info(f"旧文档 {old_id} 已被 {doc['file_name']} 取代，切片与记录已删除")
 
 
 @step_log("encode_chunks")
@@ -113,7 +111,7 @@ def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     count = count_rows(f"doc_id == {quoted_id}")
     if count != len(chunks):
         raise RuntimeError(f"写入后切片数不一致：Milvus {count}，chunks.json {len(chunks)}")
-    retire_superseded(doc)
+    drop_superseded(doc)
     logger.info(f"index     {doc['file_name']}：写入 {count} 个切片（版本 {doc['version']}）")
     return count
 

@@ -14,7 +14,6 @@ INGEST_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".md"}
 STATUS_RUNNING = "running"  # 正在导入
 STATUS_FAILED = "failed"  # 导入失败，原因见 error
 STATUS_READY = "ready"  # 导入完成，可被检索
-STATUS_SUPERSEDED = "superseded"  # 同名文件内容变化后被新文档替换
 
 
 def scan_files(root):

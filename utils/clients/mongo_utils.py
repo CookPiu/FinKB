@@ -33,7 +33,7 @@ def get_documents_by_file():
     """
     fields = {"file_name": 1, "document_title": 1, "content_type": 1, "source_path": 1}
     documents = {}
-    for doc in get_db().documents.find({"status": {"$ne": "superseded"}}, fields):
+    for doc in get_db().documents.find({}, fields):
         documents[doc["file_name"]] = doc
     return documents
 

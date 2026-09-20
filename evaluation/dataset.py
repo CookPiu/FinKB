@@ -135,7 +135,7 @@ def load_eval_items(path: Path) -> list:
 def load_corpus() -> dict:
     """文件名 → 规范化后的全文（该文件全部切片正文拼接），与检索时的切片文本同源。"""
     corpus = {}
-    for doc in get_db().documents.find({"status": {"$ne": "superseded"}}, {"file_name": 1}):
+    for doc in get_db().documents.find({}, {"file_name": 1}):
         path = get_doc_dir(doc["_id"]) / CHUNKS
         if path.exists():
             chunks = json.loads(path.read_text(encoding="utf-8"))

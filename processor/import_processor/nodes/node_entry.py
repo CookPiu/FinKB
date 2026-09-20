@@ -5,11 +5,10 @@ from pathlib import Path
 
 from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
-from utils.artifact_utils import get_doc_dir
 from utils.classify_utils import guess_content_type, title_from_filename
 from utils.clients.minio_utils import upload_file
 from utils.clients.mongo_utils import get_db
-from utils.task_utils import STATUS_READY, STATUS_RUNNING, STATUS_SUPERSEDED
+from utils.task_utils import STATUS_READY, STATUS_RUNNING
 
 # 登记结果
 ACTION_NEW = "new"  # 首次导入
@@ -44,19 +43,16 @@ def load_document(doc_id: str):
 
 @step_log("build_new_document")
 def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
-    """为首次导入的文件建立文档记录：原件上传 MinIO，查出将被替换的同名旧文档"""
+    """为首次导入的文件建立文档记录：原件上传 MinIO，查出同名的旧文档（入库成功后删除）"""
     doc_id = build_doc_id(file_hash)
     if path.parent != root:
         rel_dir = path.parent.relative_to(root).as_posix()
     else:
         rel_dir = ""
     source_path = upload_file(f"originals/{doc_id}/{path.name}", path)
-    # 同名文件内容变化：新文档就绪后替换旧文档（入库节点删除旧切片）
+    # 同名文件内容变化：新文档入库成功后，入库节点删掉旧文档的切片与记录
     supersedes = []
-    old_docs = get_db().documents.find(
-        {"file_name": path.name, "_id": {"$ne": doc_id}, "status": {"$ne": STATUS_SUPERSEDED}}, {"_id": 1}
-    )
-    for old in old_docs:
+    for old in get_db().documents.find({"file_name": path.name, "_id": {"$ne": doc_id}}, {"_id": 1}):
         supersedes.append(old["_id"])
     return {
         "_id": doc_id,
@@ -64,8 +60,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "file_name": path.name,
         "file_ext": path.suffix.lower(),
         "file_hash": file_hash,
-        "file_size": path.stat().st_size,
-        "rel_dir": rel_dir,
         "local_path": str(path),
         "source_path": source_path,
         "content_type": guess_content_type(rel_dir, path.name),
@@ -73,7 +67,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "version": 0,
         "status": STATUS_RUNNING,
         "error": None,
-        "artifacts_dir": str(get_doc_dir(doc_id)),
         "page_count": None,
         "chunk_count": None,
         "supersedes": supersedes,
