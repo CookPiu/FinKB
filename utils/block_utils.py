@@ -1,5 +1,5 @@
 """
-版面块：把 MinerU 的解析结果 content_list.json 整理成结构清楚的块，写出 blocks.json。
+版面块：把 MinerU 的解析结果 content_list.json 整理成结构清楚的块，并从中抽出财务指标事实。
 - 丢弃页眉、页脚、页码；清洗文本中的 HTML 标签、Markdown 粗体与链接（utils/text_utils.py）；
 - MinerU 的标题层级基本是扁平的（除文档标题外都是 2 级），按编号样式推断层级并重建章节路径；
 - 跨页断开的段落拼回一段；
@@ -7,17 +7,23 @@
   表格上方的“单位：元 币种：人民币”一类说明行并入表格；
 - 图片与图表交给视觉模型描述（结果缓存在 image_desc.json），标记 derived=true。
 
-版面块 block 是 dict，字段见 new_block。blocks.json 写出时省略取默认值的字段，读取时用 read_blocks 补齐。
-调用方：node_chunk（切片）与 node_enrich（抽财务事实）。
+版面块 block 是 dict，字段见 new_block；它只活在内存里，不落盘——唯一的消费者是 node_chunk。
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
 
 from common.logging.logger import logger, step_log
-from utils.artifact_utils import BLOCKS, CONTENT_LIST, IMAGE_DESC, get_doc_dir, read_json, write_json
+from utils.artifact_utils import CONTENT_LIST, IMAGE_DESC, get_doc_dir, read_json
 from utils.image_utils import image_size
 from utils.lm.lm_utils import describe_image
-from utils.table_html_utils import merge_html, parse_table
+from utils.table_html_utils import (
+    get_unit_hint,
+    is_spanning_row,
+    merge_html,
+    parse_table,
+    row_columns,
+    row_values,
+)
 from utils.text_utils import clean_text
 
 DROP_TYPES = {"header", "footer", "page_number"}
@@ -72,29 +78,6 @@ def new_block(block_type: str, page: int, section_path: list) -> dict:
 def get_last_page(block: dict) -> int:
     """块的结束页码"""
     return block["page_end"] or block["page"]
-
-
-def dump_blocks(blocks: list) -> list:
-    """转成写入 blocks.json 的格式：省略取默认值的字段"""
-    items = []
-    for block in blocks:
-        item = {}
-        for key, value in block.items():
-            if key in BLOCK_DEFAULTS and value == BLOCK_DEFAULTS[key]:
-                continue
-            item[key] = value
-        items.append(item)
-    return items
-
-
-def read_blocks(path) -> list:
-    """读取 blocks.json，补齐被省略的默认值字段"""
-    blocks = []
-    for item in read_json(path):
-        block = new_block(item["type"], item["page"], [])
-        block.update(item)
-        blocks.append(block)
-    return blocks
 
 
 # ---------- 标题层级 ----------
@@ -418,20 +401,122 @@ def describe_images(blocks: list, base, cache_path):
 
 @step_log("normalize_document")
 def normalize_document(doc_id: str) -> list:
-    """规范化一个文档：content_list.json → 版面块 → 图片描述 → 丢弃没有描述的图片 → blocks.json"""
+    """规范化一个文档：content_list.json → 版面块 → 图片描述 → 丢弃没有描述的图片"""
     doc_dir = get_doc_dir(doc_id)
     blocks = normalize(read_json(doc_dir / CONTENT_LIST))
     describe_images(blocks, get_mineru_base(doc_dir), doc_dir / IMAGE_DESC)
     blocks = [b for b in blocks if b["type"] != "image" or b["text"]]
     for i, b in enumerate(blocks):
         b["seq"] = i
-    write_json(doc_dir / BLOCKS, dump_blocks(blocks))
     return blocks
+
+
+# ---------- 财务指标事实 ----------
+
+FACT_SECTION_KEYWORDS = ("主要会计数据",)
+
+
+def extract_facts(blocks: list) -> list:
+    """
+    从"主要会计数据"一节的表格抽取财务指标事实
+    :return: 事实 dict 列表，键：unit, section, page_start, page_end, item, column, value
+    """
+    facts = []
+    for b in blocks:
+        if not _is_fact_table(b):
+            continue
+        table = parse_table(b["table_html"] or "")
+        base = {
+            "unit": b["context"] or get_unit_hint(table),
+            "section": " > ".join(b["section_path"]),
+            "page_start": b["page"],
+            "page_end": get_last_page(b),
+        }
+        if table["kv"]:
+            facts.extend(_extract_kv_facts(table, base))
+        else:
+            facts.extend(_extract_row_facts(table, base))
+    return facts
+
+
+def _is_fact_table(block: dict) -> bool:
+    """章节路径含"主要会计数据"的表格"""
+    if block["type"] != "table":
+        return False
+    path = " > ".join(block["section_path"])
+    for keyword in FACT_SECTION_KEYWORDS:
+        if keyword in path:
+            return True
+    return False
+
+
+def _new_fact(base: dict, item: str, column: str, value: str) -> dict:
+    """一条事实：行名 + 列名 + 值，带上单位、章节与页码"""
+    fact = dict(base)
+    fact["item"] = item
+    fact["column"] = column
+    fact["value"] = value
+    return fact
+
+
+def _extract_kv_facts(table: dict, base: dict) -> list:
+    """键值表：每对非空的 (键, 值) 一条事实，列名为空"""
+    facts = []
+    for i in range(len(table["grid"])):
+        vals = row_values(table, i)
+        for j in range(0, table["n_cols"], 2):
+            if vals[j] and vals[j + 1]:
+                facts.append(_new_fact(base, vals[j], "", vals[j + 1]))
+    return facts
+
+
+def _extract_row_facts(table: dict, base: dict) -> list:
+    """普通表：首列是指标名，其余每个非空单元格一条事实；首列为空的行与分组标题行跳过"""
+    facts = []
+    for i, cols in row_columns(table).items():
+        vals = row_values(table, i)
+        if not vals[0] or is_spanning_row(table, i):
+            continue
+        for j in range(1, table["n_cols"]):
+            if vals[j]:
+                facts.append(_new_fact(base, vals[0], cols[j], vals[j]))
+    return facts
+
+
+def group_facts(facts: list) -> list:
+    """
+    把一行一列的事实按 (章节, 起始页, 行名) 归拢：同一表格同一行的各列算一组
+    :return: [(base, rows)]，按首次出现顺序
+    """
+    groups = {}
+    order = []
+    for fact in facts:
+        key = (fact["section"], fact["page_start"], fact["item"])
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(fact)
+    return [(groups[key][0], groups[key]) for key in order]
+
+
+def build_fact_text(base: dict, rows: list) -> str:
+    """一组事实合并成一句：行名：列=值；…（单位）〔章节〕"""
+    cells = []
+    for row in rows:
+        if row["column"]:
+            cells.append(f"{row['column']}={row['value']}")
+        else:
+            cells.append(row["value"])
+    text = f"{base['item']}：{'；'.join(cells)}"
+    if base["unit"]:
+        text += f"（{base['unit']}）"
+    text += f"〔{base['section']}〕"
+    return text
 
 
 if __name__ == "__main__":
     # 运行：uv run python -m utils.block_utils <doc_id>
-    # 只跑纯函数部分：读 data/artifacts/<doc_id>/content_list.json 规范化后打印前 10 块，
+    # 只跑纯函数部分：读 data/artifacts/<doc_id>/content_list.json 规范化后打印版面块与抽到的事实，
     # 不调用视觉模型、不写文件
     import sys
 
@@ -439,3 +524,7 @@ if __name__ == "__main__":
     logger.info(f"版面块 {len(test_blocks)} 个")
     for test_block in test_blocks[:10]:
         print(test_block["seq"], test_block["type"], test_block["section_path"], test_block["text"][:40])
+    test_groups = group_facts(extract_facts(test_blocks))
+    logger.info(f"财务指标事实 {len(test_groups)} 组")
+    for test_base, test_rows in test_groups[:5]:
+        print(" ", build_fact_text(test_base, test_rows)[:100])

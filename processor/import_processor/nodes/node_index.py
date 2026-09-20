@@ -19,7 +19,6 @@ from utils.clients.milvus_utils import (
     quote_str,
     upsert_rows,
 )
-from utils.clients.mongo_utils import get_db
 from utils.lm.embedding_utils import generate_embeddings
 from utils.task_utils import mark_ready
 
@@ -80,15 +79,6 @@ def build_rows(doc: dict, chunks: list, vectors: list) -> list:
     return rows
 
 
-@step_log("drop_superseded")
-def drop_superseded(doc: dict):
-    """同名文件内容已变化：新文档入库成功后，删掉旧文档的切片与记录"""
-    for old_id in doc["supersedes"]:
-        delete_rows(f"doc_id == {quote_str(old_id)}")
-        get_db().documents.delete_one({"_id": old_id})
-        logger.info(f"旧文档 {old_id} 已被 {doc['file_name']} 取代，切片与记录已删除")
-
-
 @step_log("encode_chunks")
 def encode_chunks(doc: dict, chunks: list) -> list:
     """批量编码切片，返回与 chunks 一一对应的 {"dense", "sparse"}"""
@@ -117,7 +107,6 @@ def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     count = count_rows(f"doc_id == {quoted_id}")
     if count != len(chunks):
         raise RuntimeError(f"写入后切片数不一致：Milvus {count}，chunks.json {len(chunks)}")
-    drop_superseded(doc)
     logger.info(f"index     {doc['file_name']}：写入 {count} 个切片")
     return count
 
@@ -143,8 +132,8 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_index")
 def node_index(state: ImportGraphState):
     """
-    节点功能：读取 chunks.json（含 node_enrich 追加的事实与摘要），编码成向量写入 Milvus。
-    上游 node_enrich；导入图的最后一个节点，跑完文档状态变为 ready。
+    节点功能：读取 chunks.json，编码成向量写入 Milvus。
+    上游 node_chunk；导入图的最后一个节点，跑完文档状态变为 ready。
     切片与向量都是大对象，只在本节点内传递，不进状态。
     """
     doc, chunks = validate_and_get_data(state)

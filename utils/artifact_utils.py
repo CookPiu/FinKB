@@ -5,7 +5,6 @@ import os
 from common.config.path_config import path_config
 
 CONTENT_LIST = "content_list.json"  # 解析结果（MinerU 或本地 Markdown 解析）
-BLOCKS = "blocks.json"  # 规范化后的版面块
 CHUNKS = "chunks.json"  # 切片
 IMAGE_DESC = "image_desc.json"  # 图片描述缓存 {图片相对路径: 描述}
 

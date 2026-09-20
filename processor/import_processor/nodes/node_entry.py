@@ -6,6 +6,7 @@ from pathlib import Path
 from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.classify_utils import guess_content_type, title_from_filename
+from utils.clients.milvus_utils import delete_rows, quote_str
 from utils.clients.minio_utils import upload_file
 from utils.clients.mongo_utils import get_db
 from utils.task_utils import STATUS_READY, STATUS_RUNNING
@@ -41,19 +42,28 @@ def load_document(doc_id: str):
     return get_db().documents.find_one({"_id": doc_id})
 
 
+@step_log("drop_same_name_documents")
+def drop_same_name_documents(file_name: str, doc_id: str):
+    """
+    同名但内容不同的旧文档：连切片带记录一起删掉。
+    doc_id 由内容决定，同名不同 id 只可能是这份资料出了新版本，旧版本留着会被一起检索到。
+    """
+    for old in get_db().documents.find({"file_name": file_name, "_id": {"$ne": doc_id}}, {"_id": 1}):
+        delete_rows(f"doc_id == {quote_str(old['_id'])}")
+        get_db().documents.delete_one({"_id": old["_id"]})
+        logger.info(f"{file_name} 已有新版本，旧文档 {old['_id']} 的切片与记录已删除")
+
+
 @step_log("build_new_document")
 def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
-    """为首次导入的文件建立文档记录：原件上传 MinIO，查出同名的旧文档（入库成功后删除）"""
+    """为首次导入的文件建立文档记录：清掉同名旧文档，原件上传 MinIO"""
     doc_id = build_doc_id(file_hash)
     if path.parent != root:
         rel_dir = path.parent.relative_to(root).as_posix()
     else:
         rel_dir = ""
+    drop_same_name_documents(path.name, doc_id)
     source_path = upload_file(f"originals/{doc_id}/{path.name}", path)
-    # 同名文件内容变化：新文档入库成功后，入库节点删掉旧文档的切片与记录
-    supersedes = []
-    for old in get_db().documents.find({"file_name": path.name, "_id": {"$ne": doc_id}}, {"_id": 1}):
-        supersedes.append(old["_id"])
     return {
         "_id": doc_id,
         "doc_id": doc_id,
@@ -68,7 +78,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "error": None,
         "page_count": None,
         "chunk_count": None,
-        "supersedes": supersedes,
         "created_at": now,
         "updated_at": now,
     }
@@ -104,8 +113,6 @@ def register_document(path: Path, root: Path, force: bool = False):
 
     doc = build_new_document(path, root, file_hash, now)
     db.documents.insert_one(doc)
-    if doc["supersedes"]:
-        logger.info(f"{path.name} 内容已变化，就绪后将替换旧文档 {doc['supersedes']}")
     return doc, ACTION_NEW
 
 

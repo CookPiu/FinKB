@@ -1,22 +1,25 @@
 """
-节点：切片。content_list.json → 版面块 → chunks.json。
-版面块的整理规则（丢页眉页码、推断标题层级、跨页合并、单位行并入、图片描述）在 utils/block_utils.py，
-本节点负责调用它并把版面块切成检索切片（财务事实与文档摘要由下游 node_enrich 追加）：
-- 正文按章节聚合：目标 CHUNK_TARGET_CHARS 字、上限 CHUNK_MAX_CHARS 字；缓冲不足 CHUNK_MIN_CHARS 字时跨小节继续累积，
-  标题行保留在切片正文中；超长段落按句切分；
-- 表格独立成块：展示文本 = 标题/说明行 + Markdown 表格 + 表注；向量文本 = 说明 + 逐行线性化；
+节点：切片。content_list.json → 版面块（只在内存里）→ chunks.json。
+版面块的整理规则（丢页眉页码、推断标题层级、跨页合并、单位行并入、图片描述、抽财务事实）在 utils/block_utils.py，
+本节点负责调用它并把结果变成检索切片。五类切片一次产齐：
+- 正文 text：按章节聚合，目标 CHUNK_TARGET_CHARS 字、上限 CHUNK_MAX_CHARS 字；缓冲不足 CHUNK_MIN_CHARS 字时跨小节继续
+  累积，标题行保留在切片正文中；超长段落按句切分；
+- 表格 table：展示文本 = 标题/说明行 + Markdown 表格 + 表注；向量文本 = 说明 + 逐行线性化；
   线性化超过 TABLE_MAX_CHARS 字时按行拆分，每段重复表头；
-- 图片描述独立成块（kind=image_desc，derived=true）。
+- 图片描述 image_desc：derived=true；
+- 财务指标事实 fact：只对公司定期报告，"主要会计数据"表的一行一条；
+- 文档摘要 summary：每份文档一条，取前 SUMMARY_INPUT_CHARS 字正文调一次 LLM。
 
-切片 chunk 是 dict，字段见 new_chunk；chunks.json 写出全部字段。
-中间的 blocks.json 仍会写出：node_enrich 从版面块里抽财务事实，调试时也用得上。
+切片 chunk 是 dict，字段见 new_chunk；chunks.json 写出全部字段，是本节点唯一的产物。
 """
 import re
 
 from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import CHUNKS, CONTENT_LIST, get_doc_dir, write_json
-from utils.block_utils import get_last_page, normalize_document
+from utils.block_utils import build_fact_text, extract_facts, get_last_page, group_facts, normalize_document
+from utils.lm.lm_utils import chat
+from utils.load_prompt import load_prompt
 from utils.table_html_utils import get_unit_hint, linearize_rows, parse_table, split_rows, to_markdown
 
 # 切分参数（评测结果里会记录）
@@ -24,6 +27,9 @@ CHUNK_TARGET_CHARS = 600  # 正文切片目标长度，缓冲累积到该长度�
 CHUNK_MAX_CHARS = 1000  # 正文切片上限
 CHUNK_MIN_CHARS = 200  # 缓冲不足该长度时跨小节、跨表格继续累积，避免碎片切片
 TABLE_MAX_CHARS = 3000  # 表格线性化文本上限，超过时按行拆成多段
+SUMMARY_INPUT_CHARS = 6000  # 生成摘要时喂给模型的正文长度
+COMPANY_REPORT = "公司定期报告"  # 只有这类文档抽取财务指标事实
+SUMMARY_PREFIX = "（文档摘要）"
 
 _SENT_SPLIT = re.compile(r"(?<=[。！？!?；;\n])")
 
@@ -222,6 +228,43 @@ def build_chunks(blocks: list, target: int, max_chars: int, min_chars: int, tabl
     return chunks
 
 
+# ---------- 财务事实与摘要 ----------
+
+@step_log("build_fact_chunks")
+def build_fact_chunks(blocks: list) -> list:
+    """版面块 → 财务指标事实切片，同一表格同一行的各列合成一条"""
+    chunks = []
+    for base, rows in group_facts(extract_facts(blocks)):
+        text = build_fact_text(base, rows)
+        chunks.append(new_chunk("fact", text, text, base["section"], base["page_start"], base["page_end"]))
+    return chunks
+
+
+def build_summary_input(chunks: list) -> str:
+    """按顺序取正文切片拼接，截断到 SUMMARY_INPUT_CHARS 字"""
+    parts = []
+    size = 0
+    for c in chunks:
+        if c["kind"] != "text":
+            continue
+        parts.append(c["text"])
+        size += len(c["text"])
+        if size >= SUMMARY_INPUT_CHARS:
+            break
+    return "\n".join(parts)[:SUMMARY_INPUT_CHARS]
+
+
+@step_log("build_summary_chunk")
+def build_summary_chunk(doc: dict, chunks: list) -> dict:
+    """调用 LLM 生成文档摘要，做成一个切片；页码留 0，表示不指向具体某一页"""
+    prompt = load_prompt("doc_summary", title=doc["document_title"], content_type=doc["content_type"],
+                         text=build_summary_input(chunks))
+    summary = chat([{"role": "user", "content": prompt}], max_tokens=1000).strip()
+    return new_chunk("summary", SUMMARY_PREFIX + summary, summary, "", 0, 0)
+
+
+# ---------- 节点 ----------
+
 @step_log("validate_and_get_data")
 def validate_and_get_data(state: ImportGraphState):
     """
@@ -243,33 +286,42 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_chunk")
 def node_chunk(state: ImportGraphState):
     """
-    节点功能：把解析结果整理成版面块，再切成检索切片 chunks.json。
-    上游 node_parse 产出 content_list.json；下游 node_enrich 往 chunks.json 里追加事实与摘要切片。
+    节点功能：把解析结果整理成版面块，切成检索切片，连同财务事实与文档摘要一起写出 chunks.json。
+    上游 node_parse 产出 content_list.json；下游 node_index 编码入库。
     """
     doc = validate_and_get_data(state)
-    chunk_document(doc["doc_id"])
+    chunk_document(doc)
     return state
 
 
 @step_log("chunk_document")
-def chunk_document(doc_id: str) -> int:
-    """切一个文档：content_list.json → 版面块（同时写出 blocks.json）→ chunks.json，返回切片数"""
-    blocks = normalize_document(doc_id)
+def chunk_document(doc: dict) -> int:
+    """切一个文档：content_list.json → 版面块 → 正文/表格/图片 + 事实 + 摘要 → chunks.json，返回切片数"""
+    blocks = normalize_document(doc["doc_id"])
     chunks = build_chunks(blocks, CHUNK_TARGET_CHARS, CHUNK_MAX_CHARS, CHUNK_MIN_CHARS, TABLE_MAX_CHARS)
-    write_json(get_doc_dir(doc_id) / CHUNKS, chunks)
+    if doc["content_type"] == COMPANY_REPORT:
+        chunks.extend(build_fact_chunks(blocks))
+    chunks.append(build_summary_chunk(doc, chunks))
+    for i, chunk in enumerate(chunks):
+        chunk["seq"] = i
+    write_json(get_doc_dir(doc["doc_id"]) / CHUNKS, chunks)
+    kinds = {}
+    for chunk in chunks:
+        kinds[chunk["kind"]] = kinds.get(chunk["kind"], 0) + 1
+    logger.info(f"chunk     {doc['file_name']}：{len(chunks)} 个切片 {kinds}")
     return len(chunks)
 
 
 if __name__ == "__main__":
     # 运行：uv run python -m processor.import_processor.nodes.node_chunk <doc_id>
-    # 只演示切片部分：读 data/artifacts/<doc_id>/blocks.json 切分后打印前 5 个切片。
-    # 不调用视觉模型、不写文件、不连 Mongo
+    # 只演示正文与表格切片：读 data/artifacts/<doc_id>/content_list.json 规范化后切分并打印前 5 个。
+    # 不调用视觉模型与 LLM、不写文件、不连 Mongo
     import sys
 
-    from utils.artifact_utils import BLOCKS
-    from utils.block_utils import read_blocks
+    from utils.artifact_utils import read_json
+    from utils.block_utils import normalize
 
-    test_blocks = read_blocks(get_doc_dir(sys.argv[1]) / BLOCKS)
+    test_blocks = normalize(read_json(get_doc_dir(sys.argv[1]) / CONTENT_LIST))
     test_chunks = build_chunks(test_blocks, CHUNK_TARGET_CHARS, CHUNK_MAX_CHARS, CHUNK_MIN_CHARS, TABLE_MAX_CHARS)
     logger.info(f"切片 {len(test_chunks)} 个")
     for test_chunk in test_chunks[:5]:
