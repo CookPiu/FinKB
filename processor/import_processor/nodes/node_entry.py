@@ -6,7 +6,7 @@ from pathlib import Path
 from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.artifact_utils import get_doc_dir
-from utils.classify_utils import CONTENT_TYPE_OTHER, guess_content_type, title_from_filename
+from utils.classify_utils import guess_content_type, title_from_filename
 from utils.clients.minio_utils import upload_file
 from utils.clients.mongo_utils import get_db
 from utils.task_utils import STATUS_READY, STATUS_RUNNING, STATUS_SUPERSEDED
@@ -15,27 +15,6 @@ from utils.task_utils import STATUS_READY, STATUS_RUNNING, STATUS_SUPERSEDED
 ACTION_NEW = "new"  # 首次导入
 ACTION_REDO = "redo"  # 库里已有记录但没就绪，或指定了 --force：整条流水线重做
 ACTION_SKIP = "skip"  # 同哈希已就绪，跳过
-
-# documents 记录的全部字段（_id 即 doc_id），按写入顺序排列
-DOC_FIELDS = [
-    "_id", "doc_id", "file_name", "file_ext", "file_hash", "file_size", "rel_dir", "local_path", "source_path",
-    "content_type", "document_title", "version", "status", "error",
-    "artifacts_dir", "page_count", "chunk_count", "supersedes", "summary", "created_at", "updated_at",
-]
-
-# 有默认值的字段：读到缺少这些字段的旧记录时补齐
-DOC_DEFAULTS = {
-    "rel_dir": "",
-    "source_path": "",
-    "content_type": CONTENT_TYPE_OTHER,
-    "version": 0,  # 切片版本：切分节点每次产出新切片集时 +1；入库节点先写新版本再删旧版本
-    "status": STATUS_RUNNING,
-    "error": None,
-    "page_count": None,
-    "chunk_count": None,
-    "supersedes": [],
-    "summary": None,  # node_enrich 填充
-}
 
 
 def get_file_sha256(path: Path) -> str:
@@ -57,24 +36,10 @@ def build_doc_id(file_hash: str) -> str:
 
 def load_document(doc_id: str):
     """
-    从 Mongo 读取文档记录，缺少的可选字段补默认值
+    从 Mongo 读取文档记录
     :return: 文档记录 dict；不存在时返回 None
     """
-    doc = get_db().documents.find_one({"_id": doc_id})
-    if not doc:
-        return None
-    for key, value in DOC_DEFAULTS.items():
-        if key not in doc:
-            doc[key] = list(value) if isinstance(value, list) else value
-    return doc
-
-
-def to_mongo(doc: dict) -> dict:
-    """整条写回 Mongo 时只保留文档记录的字段"""
-    record = {}
-    for key in DOC_FIELDS:
-        record[key] = doc[key]
-    return record
+    return get_db().documents.find_one({"_id": doc_id})
 
 
 @step_log("build_new_document")
@@ -147,7 +112,7 @@ def register_document(path: Path, root: Path, force: bool = False):
         return existing, ACTION_REDO
 
     doc = build_new_document(path, root, file_hash, now)
-    db.documents.insert_one(to_mongo(doc))
+    db.documents.insert_one(doc)
     if doc["supersedes"]:
         logger.info(f"{path.name} 内容已变化，就绪后将替换旧文档 {doc['supersedes']}")
     return doc, ACTION_NEW
