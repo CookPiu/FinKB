@@ -1,70 +1,51 @@
-"""Milvus 集合 fin_chunks：定义、写入、删除与稠密/稀疏分别检索。
-
-文本、表格、摘要、术语、图片描述都在同一集合，用 kind 区分。
-稠密与稀疏分开检索、在代码中融合（见 query/tools/semantic_search.py），不用内置 hybrid_search。
 """
-
-from __future__ import annotations
-
-import threading
-from typing import Any
-
+Milvus 集合 fin_chunks：建表、写入、删除，以及稠密 / 稀疏分别检索。
+文本、表格、摘要、图片描述都在同一集合，用 kind 区分。
+稠密与稀疏分开检索、在代码里做 RRF 融合（见 utils/search_utils.py），不用内置 hybrid_search：
+内置融合只返回融合分，拿不到稠密余弦原始分，而拒答判断要用它。
+"""
 from pymilvus import DataType, MilvusClient
 
-from common.config.settings import get_settings
+from common.config.milvus_config import milvus_config
 
-DENSE_DIM = 1024
-TEXT_MAX_LEN = 65535
+DENSE_DIM = 1024  # BGE-M3 稠密向量维度
+TEXT_MAX_LEN = 65535  # VARCHAR 上限（按 UTF-8 字节计）
 SECTION_MAX_LEN = 1024
 
+# 检索时返回的字段（不含向量）
 OUTPUT_FIELDS = [
-    "chunk_id",
-    "doc_id",
-    "version",
-    "kind",
-    "content_type",
-    "entity_ids",
-    "section_path",
-    "page_start",
-    "page_end",
-    "publish_date",
-    "derived",
-    "text",
+    "chunk_id", "doc_id", "version", "kind", "content_type", "entity_ids",
+    "section_path", "page_start", "page_end", "publish_date", "derived", "text",
 ]
 
-_client: MilvusClient | None = None
-_lock = threading.Lock()
+# 全局 Milvus 客户端单例
+_milvus_client = None
 
 
-def get_client() -> MilvusClient:
-    global _client
-    if _client is None:
-        with _lock:
-            if _client is None:
-                _client = MilvusClient(uri=get_settings().milvus_uri, timeout=30)
-    return _client
+def get_milvus_client():
+    """获取 Milvus 客户端单例"""
+    global _milvus_client
+    if _milvus_client is None:
+        _milvus_client = MilvusClient(uri=milvus_config.milvus_uri, timeout=30)
+    return _milvus_client
 
 
-def collection_name() -> str:
-    return get_settings().milvus_collection
-
-
-def ensure_collection() -> None:
-    client = get_client()
-    name = collection_name()
+def ensure_collection():
+    """集合不存在时按固定 schema 创建；存在时确保已加载到内存"""
+    client = get_milvus_client()
+    name = milvus_config.chunks_collection
     if client.has_collection(name):
         client.load_collection(name)
         return
 
     schema = client.create_schema(auto_id=False, enable_dynamic_field=False)
+    # chunk_id = {doc_id}-{version}-{seq:04d}，重跑时 upsert 覆盖同一条，保证幂等
     schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=128)
     schema.add_field("doc_id", DataType.VARCHAR, max_length=64)
     schema.add_field("version", DataType.INT32)
     schema.add_field("kind", DataType.VARCHAR, max_length=32)
     schema.add_field("content_type", DataType.VARCHAR, max_length=64)
-    schema.add_field(
-        "entity_ids", DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=64, max_length=64
-    )
+    schema.add_field("entity_ids", DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=64, max_length=64)
     schema.add_field("section_path", DataType.VARCHAR, max_length=SECTION_MAX_LEN)
     schema.add_field("page_start", DataType.INT16)
     schema.add_field("page_end", DataType.INT16)
@@ -75,58 +56,83 @@ def ensure_collection() -> None:
     schema.add_field("sparse", DataType.SPARSE_FLOAT_VECTOR)
 
     index_params = client.prepare_index_params()
-    index_params.add_index(
-        field_name="dense", index_type="HNSW", metric_type="COSINE", params={"M": 16, "efConstruction": 200}
-    )
+    index_params.add_index(field_name="dense", index_type="HNSW", metric_type="COSINE",
+                           params={"M": 16, "efConstruction": 200})
     index_params.add_index(field_name="sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="IP")
-    for f in ("doc_id", "kind", "content_type"):
-        index_params.add_index(field_name=f, index_type="INVERTED")
+    # 标量倒排索引：按文档、类型过滤时用
+    for field_name in ["doc_id", "kind", "content_type"]:
+        index_params.add_index(field_name=field_name, index_type="INVERTED")
 
     client.create_collection(name, schema=schema, index_params=index_params, consistency_level="Strong")
     client.load_collection(name)
 
 
-def upsert(rows: list[dict[str, Any]], batch_size: int = 64) -> None:
-    client = get_client()
-    for i in range(0, len(rows), batch_size):
-        client.upsert(collection_name(), rows[i : i + batch_size])
+def upsert_rows(rows, batch_size=64):
+    """分批 upsert，避免单次请求过大"""
+    client = get_milvus_client()
+    for start in range(0, len(rows), batch_size):
+        client.upsert(milvus_config.chunks_collection, rows[start:start + batch_size])
 
 
-def delete(filter_expr: str) -> None:
-    get_client().delete(collection_name(), filter=filter_expr)
+def delete_rows(filter_expr: str):
+    get_milvus_client().delete(milvus_config.chunks_collection, filter=filter_expr)
 
 
-def count(filter_expr: str = "") -> int:
-    res = get_client().query(collection_name(), filter=filter_expr, output_fields=["count(*)"])
-    return int(res[0]["count(*)"]) if res else 0
+def count_rows(filter_expr: str = "") -> int:
+    result = get_milvus_client().query(milvus_config.chunks_collection, filter=filter_expr,
+                                       output_fields=["count(*)"])
+    if not result:
+        return 0
+    return int(result[0]["count(*)"])
 
 
-def search_dense(vec: list[float], limit: int, filter_expr: str = "") -> list[dict[str, Any]]:
-    res = get_client().search(
-        collection_name(),
-        data=[vec],
+def _hits_to_rows(hits):
+    """把 Milvus 的命中结果展平成字典：业务字段 + score（相似度）"""
+    rows = []
+    for hit in hits:
+        row = dict(hit["entity"])
+        row["score"] = hit["distance"]
+        rows.append(row)
+    return rows
+
+
+def search_dense(vector, limit: int, filter_expr: str = ""):
+    """
+    稠密向量检索（余弦相似度）
+    :return: [{"score", "chunk_id", "doc_id", ...OUTPUT_FIELDS}]，按相似度降序
+    """
+    result = get_milvus_client().search(
+        milvus_config.chunks_collection,
+        data=[vector],
         anns_field="dense",
         limit=limit,
         filter=filter_expr,
         output_fields=OUTPUT_FIELDS,
+        # HNSW 的 ef 必须不小于 limit，取 2 倍留余量
         search_params={"metric_type": "COSINE", "params": {"ef": max(64, limit * 2)}},
     )
-    return [{"score": hit["distance"], **hit["entity"]} for hit in res[0]]
+    return _hits_to_rows(result[0])
 
 
-def search_sparse(vec: dict[int, float], limit: int, filter_expr: str = "") -> list[dict[str, Any]]:
-    res = get_client().search(
-        collection_name(),
-        data=[vec],
+def search_sparse(vector, limit: int, filter_expr: str = ""):
+    """
+    稀疏向量检索（内积）
+    :param vector: {维度: 权重}
+    :return: 同 search_dense
+    """
+    result = get_milvus_client().search(
+        milvus_config.chunks_collection,
+        data=[vector],
         anns_field="sparse",
         limit=limit,
         filter=filter_expr,
         output_fields=OUTPUT_FIELDS,
         search_params={"metric_type": "IP", "params": {"drop_ratio_search": 0.0}},
     )
-    return [{"score": hit["distance"], **hit["entity"]} for hit in res[0]]
+    return _hits_to_rows(result[0])
 
 
 def quote_str(value: str) -> str:
-    """把字符串安全地放进 Milvus 过滤表达式。"""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """把字符串安全地放进 Milvus 过滤表达式：转义反斜杠和双引号后加上双引号"""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return '"' + escaped + '"'

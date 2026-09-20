@@ -10,10 +10,10 @@ dependencies = [
     "minio>=7.2.20",
     "openai>=1.60",
     "pydantic>=2.10",
-    "pydantic-settings>=2.7",
     # 服务端为 Milvus v2.5.5；2.6.x 客户端已在旧项目实测兼容，3.x 未验证
     "pymilvus>=2.6.10,<2.7",
     "pymongo>=4.10",
+    "python-dotenv>=1.2.3",
     "python-multipart>=0.0.20",
     "requests>=2.32",
     "torch>=2.6",

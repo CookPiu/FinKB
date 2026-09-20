@@ -1,30 +1,43 @@
-from dataclasses import dataclass
-
-from common.models.document import Stage, next_stage
-from evaluation.dataset import EvalItem, Gold, norm, self_check
+from evaluation.dataset import build_eval_item, norm, resolve_turns, self_check
 from evaluation.metrics import file_hit_rank, first_hit_rank, summarize
+from processor.import_processor.nodes.node_entry import build_doc_id
 from utils.classify_utils import guess_content_type, title_from_filename
-from processor.import_processor.nodes.node_entry import doc_id_from_hash
-from utils.search_utils import build_filter, rrf_fuse
+from utils.task_utils import (
+    STAGE_CHUNK,
+    STAGE_ENRICH,
+    STAGE_INDEX,
+    STAGE_ORDER,
+    STAGE_PARSE,
+    STAGE_REGISTER,
+    is_stage_done,
+)
 
 
-@dataclass
-class H:
-    file_name: str
-    text: str
+def make_hit(file_name, text):
+    return {"file_name": file_name, "text": text}
 
 
-def test_next_stage_order():
-    assert next_stage(None) == Stage.REGISTER
-    assert next_stage(Stage.REGISTER) == Stage.PARSE
-    assert next_stage("chunk") == Stage.INDEX
-    assert next_stage(Stage.INDEX) == Stage.ENRICH
-    assert next_stage(Stage.ENRICH) is None
+def test_stage_order():
+    assert STAGE_ORDER == ["register", "parse", "normalize", "chunk", "index", "enrich"]
+    # 还没有完成任何阶段：从 register 开始
+    assert not is_stage_done({"stage": None}, STAGE_REGISTER)
+    # 完成 register 后下一步是 parse
+    assert is_stage_done({"stage": STAGE_REGISTER}, STAGE_REGISTER)
+    assert not is_stage_done({"stage": STAGE_REGISTER}, STAGE_PARSE)
+    # 完成 chunk 后下一步是 index
+    assert is_stage_done({"stage": "chunk"}, STAGE_CHUNK)
+    assert not is_stage_done({"stage": "chunk"}, STAGE_INDEX)
+    # 完成 index 后下一步是 enrich
+    assert is_stage_done({"stage": STAGE_INDEX}, STAGE_INDEX)
+    assert not is_stage_done({"stage": STAGE_INDEX}, STAGE_ENRICH)
+    # 完成 enrich 后全部完成
+    for stage in STAGE_ORDER:
+        assert is_stage_done({"stage": STAGE_ENRICH}, stage)
 
 
 def test_doc_id_is_deterministic_prefix():
     h = "ab" * 32
-    assert doc_id_from_hash(h) == h[:16]
+    assert build_doc_id(h) == h[:16]
 
 
 def test_content_type_rules():
@@ -41,8 +54,12 @@ def test_norm_handles_fullwidth_and_whitespace():
 
 
 def test_hit_requires_file_and_quote():
-    golds = [Gold(file="a.pdf", quote="托管费 0.20%")]
-    ranked = [H("b.pdf", "托管费0.20%"), H("a.pdf", "管理费0.60%"), H("a.pdf", "固定费率 托管费0.20% 基金托管人")]
+    golds = [{"file": "a.pdf", "quote": "托管费 0.20%"}]
+    ranked = [
+        make_hit("b.pdf", "托管费0.20%"),
+        make_hit("a.pdf", "管理费0.60%"),
+        make_hit("a.pdf", "固定费率 托管费0.20% 基金托管人"),
+    ]
     assert first_hit_rank(ranked, golds) == 3
     assert file_hit_rank(ranked, golds) == 2
 
@@ -56,15 +73,15 @@ def test_summarize():
 def test_self_check_flags_missing_quote_and_file():
     corpus = {"a.pdf": norm("本基金不提供任何保证。投资者可能损失投资本金。")}
     items = [
-        EvalItem.model_validate(
+        build_eval_item(
             {"id": "x1", "category": "product", "turns": [{"q": "q"}], "expect": "answer",
              "gold": [{"file": "a.pdf", "quote": "本基金不提供 任何保证"}]}
         ),
-        EvalItem.model_validate(
+        build_eval_item(
             {"id": "x2", "category": "product", "turns": [{"q": "q"}], "expect": "answer",
              "gold": [{"file": "a.pdf", "quote": "保证最低收益率"}]}
         ),
-        EvalItem.model_validate(
+        build_eval_item(
             {"id": "x3", "category": "product", "turns": [{"q": "q"}], "expect": "answer",
              "gold": [{"file": "b.pdf", "quote": "本基金不提供任何保证"}]}
         ),
@@ -75,25 +92,11 @@ def test_self_check_flags_missing_quote_and_file():
 
 
 def test_multiturn_turn_fields_resolved():
-    it = EvalItem.model_validate(
+    it = build_eval_item(
         {"id": "mt", "category": "multiturn", "turns": [
             {"q": "华夏的基金管理费多少？", "expect": "clarify"},
             {"q": "债券那只", "expect": "answer", "gold": [{"file": "a.pdf", "quote": "固定费率0.60%"}]},
         ]}
     )
-    turns = it.resolved_turns()
-    assert [t.expect for t in turns] == ["clarify", "answer"]
-
-
-def test_build_filter_and_rrf():
-    assert build_filter(kinds=["table"], content_types=["公司定期报告"]) == (
-        'kind in ["table"] and content_type in ["公司定期报告"]'
-    )
-    assert build_filter(entity_ids=["e1"]) == 'ARRAY_CONTAINS_ANY(entity_ids, ["e1"])'
-    row = dict(doc_id="d", version=1, kind="text", content_type="c", section_path="", page_start=1, page_end=1,
-               derived=False, text="t", entity_ids=[])
-    dense = [{"chunk_id": "a", "score": 0.9, **row}, {"chunk_id": "b", "score": 0.8, **row}]
-    sparse = [{"chunk_id": "b", "score": 0.3, **row}]
-    fused = rrf_fuse(dense, sparse)
-    assert [h.chunk_id for h in fused] == ["b", "a"]  # 两路都召回的排前面
-    assert fused[0].score_dense == 0.8 and fused[0].score_sparse == 0.3 and fused[1].score_sparse is None
+    turns = resolve_turns(it)
+    assert [t["expect"] for t in turns] == ["clarify", "answer"]

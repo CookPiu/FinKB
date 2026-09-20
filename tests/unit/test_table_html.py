@@ -1,4 +1,6 @@
 from utils.table_html_utils import (
+    get_column_names,
+    get_unit_hint,
     linearize_rows,
     merge_html,
     parse_table,
@@ -17,8 +19,8 @@ MAOTAI = (
 
 def test_simple_header_and_linearize():
     t = parse_table(MAOTAI)
-    assert t.header_rows == 1
-    assert t.n_cols == 4
+    assert t["header_rows"] == 1
+    assert t["n_cols"] == 4
     lines = linearize_rows(t)
     assert lines[0] == (
         "项目=营业收入；本报告期=53,909,252,220.51；上年同期=50,600,957,885.78；"
@@ -42,14 +44,14 @@ def test_rowspan_colspan_expansion_and_multilevel_header():
         "</table>"
     )
     t = parse_table(html)
-    assert t.header_rows == 2
-    assert t.grid == [
+    assert t["header_rows"] == 2
+    assert t["grid"] == [
         ["项目", "2026年3月31日", "2026年3月31日"],
         ["项目", "金额", "占比"],
         ["贷款", "100", "50%"],
         ["贷款", "200", "30%"],
     ]
-    assert t.column_names() == ["项目", "2026年3月31日·金额", "2026年3月31日·占比"]
+    assert get_column_names(t) == ["项目", "2026年3月31日·金额", "2026年3月31日·占比"]
     # 纵向合并的分组名在每行重复，便于单行检索
     assert linearize_rows(t)[1] == "项目=贷款；2026年3月31日·金额=200；2026年3月31日·占比=30%"
 
@@ -72,23 +74,23 @@ def test_rowspan_at_row_end():
         "<tr><td>d</td><td>e</td></tr></table>"
     )
     t = parse_table(html)
-    assert t.grid[1] == ["d", "e", "c"]
+    assert t["grid"][1] == ["d", "e", "c"]
 
 
 def test_br_and_entities_in_cells():
     html = "<table><tr><td>名称</td><td>值</td></tr><tr><td>托管费<br>（年费率）</td><td>0.10&#37;</td></tr></table>"
     t = parse_table(html)
-    assert t.grid[1] == ["托管费 （年费率）", "0.10%"]
+    assert t["grid"][1] == ["托管费 （年费率）", "0.10%"]
 
 
 def test_th_header_detection():
     html = "<table><tr><th>A</th><th>B</th></tr><tr><th>A1</th><th>B1</th></tr><tr><td>1</td><td>2</td></tr></table>"
-    assert parse_table(html).header_rows == 2
+    assert parse_table(html)["header_rows"] == 2
 
 
 def test_single_row_table_has_no_header():
     t = parse_table("<table><tr><td>基金代码</td><td>001001</td></tr></table>")
-    assert t.header_rows == 0
+    assert t["header_rows"] == 0
     assert linearize_rows(t) == ["基金代码=001001"]
 
 
@@ -100,7 +102,7 @@ def test_four_column_kv_table():
         '<tr><td>其他</td><td colspan="3">存续期间内基金份额持有人数量连续60个工作日达不到100人</td></tr></table>'
     )
     t = parse_table(html)
-    assert t.header_rows == 0 and t.kv
+    assert t["header_rows"] == 0 and t["kv"]
     assert linearize_rows(t) == [
         "基金简称=华夏债券；基金代码=001001",
         "下属基金简称=华夏债券C；下属基金代码=001003",
@@ -114,7 +116,7 @@ def test_two_column_kv_with_long_value():
         "<tr><td>业绩比较基准</td><td>中证综合债券指数</td></tr></table>"
     )
     t = parse_table(html)
-    assert t.header_rows == 0 and t.kv
+    assert t["header_rows"] == 0 and t["kv"]
     assert linearize_rows(t)[1] == "业绩比较基准=中证综合债券指数"
 
 
@@ -125,8 +127,8 @@ def test_numeric_first_row_is_not_header():
         "<tr><td>中国贵州茅台酒厂(集团)有限责任公司</td><td>678,291,955</td><td>54.07</td><td>无限售</td></tr></table>"
     )
     t = parse_table(html)
-    assert t.header_rows == 0
-    assert not t.kv  # 第三行偶数位置是数值，不是键值表
+    assert t["header_rows"] == 0
+    assert not t["kv"]  # 第三行偶数位置是数值，不是键值表
 
 
 def test_subheader_row_switches_column_names():
@@ -151,14 +153,14 @@ def test_unit_in_first_header_cell():
         "<tr><td>营业收入</td><td>86,940</td><td>83,751</td></tr></table>"
     )
     t = parse_table(html)
-    assert t.unit_hint == "(人民币百万元,特别注明除外)"
+    assert get_unit_hint(t) == "(人民币百万元,特别注明除外)"
     assert linearize_rows(t) == ["项目=营业收入；2026年1-3月=86,940；2025年1-3月=83,751"]
 
 
 def test_parenthesized_negative_is_numeric_for_header_check():
     html = "<table><tr><td>股东权益</td><td>(1.3%)</td></tr><tr><td>股本</td><td>19,406</td></tr></table>"
     t = parse_table(html)
-    assert t.header_rows == 0 and t.kv
+    assert t["header_rows"] == 0 and t["kv"]
 
 
 def test_markdown_blanks_horizontal_span_duplicates():
@@ -179,7 +181,10 @@ def test_split_rows_respects_budget_and_keeps_all_rows():
     t = parse_table(f"<table><tr><td>项目</td><td>金额</td></tr>{rows}</table>")
     groups = split_rows(t, max_chars=120)
     assert len(groups) > 1
-    assert [i for g in groups for i in g] == list(range(1, 41))
+    all_rows = []
+    for g in groups:
+        all_rows.extend(g)
+    assert all_rows == list(range(1, 41))
     for g in groups:
         assert sum(len(x) + 1 for x in linearize_rows(t, g)) <= 120
 
@@ -188,12 +193,12 @@ def test_merge_html_drops_repeated_header():
     a = "<table><tr><td>项目</td><td>本期</td></tr><tr><td>营业收入</td><td>1</td></tr></table>"
     b = "<table><tr><td>项目</td><td>本期</td></tr><tr><td>净利润</td><td>2</td></tr></table>"
     t = parse_table(merge_html(a, b))
-    assert t.grid == [["项目", "本期"], ["营业收入", "1"], ["净利润", "2"]]
+    assert t["grid"] == [["项目", "本期"], ["营业收入", "1"], ["净利润", "2"]]
 
 
 def test_merge_html_keeps_rows_without_header():
     a = "<table><tr><td>项目</td><td>本期</td></tr><tr><td>营业收入</td><td>1</td></tr></table>"
     b = "<table><tr><td>净利润</td><td>2</td></tr></table>"
     t = parse_table(merge_html(a, b))
-    assert t.grid[-1] == ["净利润", "2"]
-    assert len(t.grid) == 3
+    assert t["grid"][-1] == ["净利润", "2"]
+    assert len(t["grid"]) == 3

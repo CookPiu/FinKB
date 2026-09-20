@@ -1,7 +1,6 @@
 from utils.citation_utils import finalize_citations, render_sources
 from utils.guard_utils import REPLACEMENT, StreamGuard, violations
-from utils.entity_utils import Entity, EntityRegistry
-from common.models.evidence import Evidence
+from utils.entity_utils import pick_option, resolve_mentions
 from utils.clients.mongo_history_utils import last_turns
 
 # ---------- 合规守卫：正反两类用例 ----------
@@ -42,15 +41,16 @@ def test_stream_guard_replaces_whole_sentence_and_keeps_others():
 
 
 def _ev(eid, title="华夏债券基金产品资料概要", page=3):
-    return Evidence(eid=eid, kind="chunk", text="t", doc_id="d", file_name=f"{title}.pdf", document_title=title,
-                    content_type="基金产品资料概要", page_start=page, page_end=page,
-                    entity_name="华夏债券C", entity_codes=["001003"])
+    return {"eid": eid, "kind": "chunk", "text": "t", "doc_id": "d", "file_name": f"{title}.pdf",
+            "document_title": title, "content_type": "基金产品资料概要", "page_start": page, "page_end": page,
+            "source_path": "", "entity_name": "华夏债券C", "entity_codes": ["001003"], "score_dense": None,
+            "derived": False}
 
 
 def test_citations_keep_valid_drop_invented_and_order_by_first_use():
     text, used = finalize_citations("托管费0.20%[E2]，管理费0.60%【E1】，另见[E9]。[E2]", [_ev(1), _ev(2, page=4)])
     assert text == "托管费0.20%[E2]，管理费0.60%[E1]，另见。[E2]"
-    assert [e.eid for e in used] == [2, 1]
+    assert [e["eid"] for e in used] == [2, 1]
     assert render_sources(used).splitlines()[0] == (
         "[E2] 华夏债券基金产品资料概要｜基金产品资料概要｜华夏债券C（001003）｜华夏债券基金产品资料概要.pdf｜第4页"
     )
@@ -58,35 +58,34 @@ def test_citations_keep_valid_drop_invented_and_order_by_first_use():
 
 # ---------- 实体解析 ----------
 
-REG = EntityRegistry(
-    [
-        Entity(id="bond", name="华夏债券投资基金（华夏债券C）", type="fund", codes=["001001", "001003"],
-               aliases=["华夏债券C", "华夏债券", "华夏"]),
-        Entity(id="fcf", name="华夏国证自由现金流ETF发起式联接基金", type="fund", codes=["023917"],
-               aliases=["华夏自由现金流", "华夏"]),
-        Entity(id="maotai", name="贵州茅台酒股份有限公司", type="company", codes=["600519"], aliases=["贵州茅台", "茅台"]),
-    ]
-)
+ENTITIES = [
+    {"id": "bond", "name": "华夏债券投资基金（华夏债券C）", "type": "fund", "codes": ["001001", "001003"],
+     "aliases": ["华夏债券C", "华夏债券", "华夏"], "files": []},
+    {"id": "fcf", "name": "华夏国证自由现金流ETF发起式联接基金", "type": "fund", "codes": ["023917"],
+     "aliases": ["华夏自由现金流", "华夏"], "files": []},
+    {"id": "maotai", "name": "贵州茅台酒股份有限公司", "type": "company", "codes": ["600519"],
+     "aliases": ["贵州茅台", "茅台"], "files": []},
+]
 
 
 def test_resolve_by_code_alias_and_ambiguity():
-    assert REG.resolve(["001003"]).entities[0].id == "bond"
-    assert REG.resolve(["华夏债券C"]).entities[0].id == "bond"
-    assert REG.resolve(["茅台"]).entities[0].id == "maotai"
-    amb = REG.resolve(["华夏的那只基金"])
-    assert amb.status == "ambiguous" and {e.id for e in amb.candidates} == {"bond", "fcf"}
-    assert REG.resolve(["宁德时代"]).status == "unknown"
-    assert REG.resolve(["基金"]).status == "none"  # 泛指词不算实体
-    assert REG.resolve([]).status == "none"
+    assert resolve_mentions(["001003"], ENTITIES)["entities"][0]["id"] == "bond"
+    assert resolve_mentions(["华夏债券C"], ENTITIES)["entities"][0]["id"] == "bond"
+    assert resolve_mentions(["茅台"], ENTITIES)["entities"][0]["id"] == "maotai"
+    amb = resolve_mentions(["华夏的那只基金"], ENTITIES)
+    assert amb["status"] == "ambiguous" and {e["id"] for e in amb["candidates"]} == {"bond", "fcf"}
+    assert resolve_mentions(["宁德时代"], ENTITIES)["status"] == "unknown"
+    assert resolve_mentions(["基金"], ENTITIES)["status"] == "none"  # 泛指词不算实体
+    assert resolve_mentions([], ENTITIES)["status"] == "none"
 
 
 def test_pick_option_for_clarification():
-    opts = [REG.by_id["bond"], REG.by_id["fcf"]]
-    assert REG.pick_option("第一个", opts).id == "bond"
-    assert REG.pick_option("2", opts).id == "fcf"
-    assert REG.pick_option("债券那只", opts).id == "bond"
-    assert REG.pick_option("自由现金流的", opts).id == "fcf"
-    assert REG.pick_option("茅台营收多少", opts) is None
+    opts = [ENTITIES[0], ENTITIES[1]]
+    assert pick_option("第一个", opts)["id"] == "bond"
+    assert pick_option("2", opts)["id"] == "fcf"
+    assert pick_option("债券那只", opts)["id"] == "bond"
+    assert pick_option("自由现金流的", opts)["id"] == "fcf"
+    assert pick_option("茅台营收多少", opts) is None
 
 
 # ---------- 会话历史：取最近 n 条（旧项目 K-23） ----------

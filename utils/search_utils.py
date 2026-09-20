@@ -1,135 +1,150 @@
-"""semantic_search：稠密、稀疏分别检索，在代码中做 RRF 融合并保留两路原始分。
-
+"""
+语义检索：稠密、稀疏分别检索，在代码中做 RRF 融合并保留两路原始分
 不用 Milvus 内置 hybrid_search：内置融合只返回融合分，拿不到稠密余弦原始分，
 而充分性判断（M2）依赖稠密原始分，且需要逐路分析召回效果。
+命中 hit 为 dict：chunk_id, doc_id, version, kind, content_type, section_path, page_start, page_end, derived, text,
+entity_ids, score_dense, score_sparse, rank_dense, rank_sparse, score_rrf,
+以及来源元数据 file_name, document_title, source_path, publish_date（来自 documents，全程随证据携带）。
 """
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Any
-
-from utils.lm import embedding_utils as embedding
-from utils.clients import milvus_utils as milvus
-from utils.clients import mongo_utils as mongo
+from utils.clients.milvus_utils import quote_str, search_dense, search_sparse
+from utils.clients.mongo_utils import get_db
+from utils.lm.embedding_utils import generate_query_embedding
 
 RRF_K = 60
 
-
-@dataclass
-class SearchHit:
-    chunk_id: str
-    doc_id: str
-    version: int
-    kind: str
-    content_type: str
-    section_path: str
-    page_start: int
-    page_end: int
-    derived: bool
-    text: str
-    entity_ids: list[str] = field(default_factory=list)
-    score_dense: float | None = None
-    score_sparse: float | None = None
-    rank_dense: int | None = None
-    rank_sparse: int | None = None
-    score_rrf: float = 0.0
-    # 来源元数据（来自 documents），全程随证据携带
-    file_name: str = ""
-    document_title: str = ""
-    source_path: str = ""
-    publish_date: int | None = None
+# 文档元数据缓存：doc_id → documents 里的 file_name / document_title / source_path / publish_date / version / status
+_doc_cache = {}
 
 
-def build_filter(
-    kinds: list[str] | None = None,
-    content_types: list[str] | None = None,
-    doc_ids: list[str] | None = None,
-    entity_ids: list[str] | None = None,
-) -> str:
+def join_quoted(values: list) -> str:
+    """每个值加引号转义后用逗号连接"""
+    return ", ".join([quote_str(v) for v in values])
+
+
+def build_filter(kinds=None, content_types=None, doc_ids=None, entity_ids=None) -> str:
+    """
+    拼 Milvus 过滤表达式，各条件之间为 and；参数为空表示该项不限
+    :return: 表达式字符串，没有任何条件时为空串
+    """
     parts = []
-    for field_name, values in (("kind", kinds), ("content_type", content_types), ("doc_id", doc_ids)):
-        if values:
-            parts.append(f"{field_name} in [{', '.join(milvus.quote_str(v) for v in values)}]")
+    if kinds:
+        parts.append(f"kind in [{join_quoted(kinds)}]")
+    if content_types:
+        parts.append(f"content_type in [{join_quoted(content_types)}]")
+    if doc_ids:
+        parts.append(f"doc_id in [{join_quoted(doc_ids)}]")
     if entity_ids:
-        parts.append(f"ARRAY_CONTAINS_ANY(entity_ids, [{', '.join(milvus.quote_str(v) for v in entity_ids)}])")
+        parts.append(f"ARRAY_CONTAINS_ANY(entity_ids, [{join_quoted(entity_ids)}])")
     return " and ".join(parts)
 
 
-def rrf_fuse(dense: list[dict[str, Any]], sparse: list[dict[str, Any]], k: int = RRF_K) -> list[SearchHit]:
-    hits: dict[str, SearchHit] = {}
+def new_hit(row: dict) -> dict:
+    """由 Milvus 返回的一行建立命中记录；分数、名次与来源元数据随后填写"""
+    return {
+        "chunk_id": row["chunk_id"],
+        "doc_id": row["doc_id"],
+        "version": row["version"],
+        "kind": row["kind"],
+        "content_type": row["content_type"],
+        "section_path": row["section_path"],
+        "page_start": row["page_start"],
+        "page_end": row["page_end"],
+        "derived": row["derived"],
+        "text": row["text"],
+        "entity_ids": list(row.get("entity_ids") or []),
+        "score_dense": None,
+        "score_sparse": None,
+        "rank_dense": None,
+        "rank_sparse": None,
+        "score_rrf": 0.0,
+        "file_name": "",
+        "document_title": "",
+        "source_path": "",
+        "publish_date": None,
+    }
 
-    def get(row: dict[str, Any]) -> SearchHit:
-        cid = row["chunk_id"]
-        if cid not in hits:
-            hits[cid] = SearchHit(
-                chunk_id=cid,
-                doc_id=row["doc_id"],
-                version=row["version"],
-                kind=row["kind"],
-                content_type=row["content_type"],
-                section_path=row["section_path"],
-                page_start=row["page_start"],
-                page_end=row["page_end"],
-                derived=row["derived"],
-                text=row["text"],
-                entity_ids=list(row.get("entity_ids") or []),
-            )
-        return hits[cid]
 
+def get_or_add_hit(hits: dict, row: dict) -> dict:
+    """同一切片在两路都出现时只保留一条命中记录"""
+    chunk_id = row["chunk_id"]
+    if chunk_id not in hits:
+        hits[chunk_id] = new_hit(row)
+    return hits[chunk_id]
+
+
+def rrf_fuse(dense: list, sparse: list, k: int = RRF_K) -> list:
+    """
+    倒数名次融合：每一路贡献 1 / (k + 名次)，两路都召回的切片分数累加
+    :param dense: search_dense 的结果（按相似度降序）
+    :param sparse: search_sparse 的结果（按内积降序）
+    :param k: RRF 平滑常数
+    :return: 去重后的命中列表，按融合分降序；两路原始分保留 4 位小数，未召回的一路为 None
+    """
+    hits = {}
     for rank, row in enumerate(dense, 1):
-        h = get(row)
-        h.score_dense, h.rank_dense = round(float(row["score"]), 4), rank
-        h.score_rrf += 1.0 / (k + rank)
+        hit = get_or_add_hit(hits, row)
+        hit["score_dense"] = round(float(row["score"]), 4)
+        hit["rank_dense"] = rank
+        hit["score_rrf"] += 1.0 / (k + rank)
     for rank, row in enumerate(sparse, 1):
-        h = get(row)
-        h.score_sparse, h.rank_sparse = round(float(row["score"]), 4), rank
-        h.score_rrf += 1.0 / (k + rank)
-    return sorted(hits.values(), key=lambda h: h.score_rrf, reverse=True)
+        hit = get_or_add_hit(hits, row)
+        hit["score_sparse"] = round(float(row["score"]), 4)
+        hit["rank_sparse"] = rank
+        hit["score_rrf"] += 1.0 / (k + rank)
+    return sorted(hits.values(), key=lambda h: h["score_rrf"], reverse=True)
 
 
-_doc_cache: dict[str, dict] = {}
-
-
-def _doc_meta(doc_ids: set[str]) -> dict[str, dict]:
-    missing = [d for d in doc_ids if d not in _doc_cache]
+def get_doc_meta(doc_ids: set) -> dict:
+    """
+    读取文档元数据，同一文档在进程内只查一次 Mongo
+    :return: {doc_id: 文档元数据}；documents 里查不到的 doc_id 不在结果中
+    """
+    missing = [doc_id for doc_id in doc_ids if doc_id not in _doc_cache]
     if missing:
-        for d in mongo.get_db().documents.find(
-            {"_id": {"$in": missing}},
-            {"file_name": 1, "document_title": 1, "source_path": 1, "publish_date": 1, "version": 1, "status": 1},
-        ):
-            _doc_cache[d["_id"]] = d
-    return {d: _doc_cache[d] for d in doc_ids if d in _doc_cache}
+        fields = {"file_name": 1, "document_title": 1, "source_path": 1, "publish_date": 1, "version": 1, "status": 1}
+        for doc in get_db().documents.find({"_id": {"$in": missing}}, fields):
+            _doc_cache[doc["_id"]] = doc
+    result = {}
+    for doc_id in doc_ids:
+        if doc_id in _doc_cache:
+            result[doc_id] = _doc_cache[doc_id]
+    return result
 
 
-def semantic_search(
-    query: str,
-    *,
-    top_k: int = 5,
-    candidates: int = 30,
-    kinds: list[str] | None = None,
-    content_types: list[str] | None = None,
-    doc_ids: list[str] | None = None,
-    entity_ids: list[str] | None = None,
-) -> list[SearchHit]:
-    enc = embedding.encode_query(query)
-    expr = build_filter(kinds, content_types, doc_ids, entity_ids)
-    dense = milvus.search_dense(enc.dense, candidates, expr)
-    sparse = milvus.search_sparse(enc.sparse, candidates, expr)
-    fused = rrf_fuse(dense, sparse)
-
-    meta = _doc_meta({h.doc_id for h in fused})
-    out: list[SearchHit] = []
-    for h in fused:
-        m = meta.get(h.doc_id)
-        # 只保留文档当前版本的切片（新旧版本切换的瞬间可能两版并存）
-        if m is None or m.get("version") != h.version or m.get("status") == "superseded":
+def attach_doc_meta(hits: list, top_k: int) -> list:
+    """
+    给命中补上来源元数据并取前 top_k 条
+    只保留文档当前版本的切片：新旧版本切换的瞬间 Milvus 里可能两版并存
+    """
+    meta = get_doc_meta({hit["doc_id"] for hit in hits})
+    results = []
+    for hit in hits:
+        doc = meta.get(hit["doc_id"])
+        if doc is None or doc.get("version") != hit["version"] or doc.get("status") == "superseded":
             continue
-        h.file_name = m.get("file_name", "")
-        h.document_title = m.get("document_title", "")
-        h.source_path = m.get("source_path", "")
-        h.publish_date = m.get("publish_date")
-        out.append(h)
-        if len(out) >= top_k:
+        hit["file_name"] = doc.get("file_name", "")
+        hit["document_title"] = doc.get("document_title", "")
+        hit["source_path"] = doc.get("source_path", "")
+        hit["publish_date"] = doc.get("publish_date")
+        results.append(hit)
+        if len(results) >= top_k:
             break
-    return out
+    return results
+
+
+def semantic_search(query: str, top_k: int = 5, candidates: int = 30, kinds=None, content_types=None,
+                    doc_ids=None, entity_ids=None) -> list:
+    """
+    稠密 + 稀疏检索并融合
+    :param query: 问题
+    :param top_k: 最多返回几条
+    :param candidates: 每一路先取多少条候选
+    :param kinds / content_types / doc_ids / entity_ids: 过滤条件，见 build_filter
+    :return: 命中 dict 列表，按融合分降序
+    """
+    embedding = generate_query_embedding(query)
+    expr = build_filter(kinds, content_types, doc_ids, entity_ids)
+    dense = search_dense(embedding["dense"], candidates, expr)
+    sparse = search_sparse(embedding["sparse"], candidates, expr)
+    fused = rrf_fuse(dense, sparse)
+    return attach_doc_meta(fused, top_k)

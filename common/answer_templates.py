@@ -24,6 +24,7 @@ OUT_OF_SCOPE = "该问题超出本金融知识库的范围。" + REFUSE
 CHITCHAT = "您好，我是金融知识库助手，可以帮您查询金融产品资料、公司公告、宏观政策、金融知识和常见业务流程。"
 
 
-def clarify(names: list[str]) -> str:
-    options = "\n".join(f"{i}. {n}" for i, n in enumerate(names, 1))
+def clarify(names: list) -> str:
+    """澄清话术：列出候选对象，请用户回复序号或名称"""
+    options ="\n".join(f"{i}. {n}" for i, n in enumerate(names, 1))
     return f"知识库中有多个可能的对象，请问您指的是哪一个？\n{options}\n请回复序号或名称。"

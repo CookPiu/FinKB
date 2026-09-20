@@ -3,8 +3,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-import api.file_import_service as import_service
-import api.query_service as query_service
+from api import file_import_service
+from api import query_service
 from utils.sse_utils import sse_pack
 
 
@@ -17,12 +17,17 @@ def parse_events(body: str) -> list[tuple[str, dict]]:
 
 
 class FakeGraph:
-    def __init__(self, items=None, error: Exception | None = None):
-        self.items, self.error = items or [], error
+    """替身查询图：按给定顺序产出 (mode, chunk)，可选在最后抛出异常"""
+
+    def __init__(self, items=None, error=None):
+        self.items = items or []
+        self.error = error
+        self.state = None
 
     def stream(self, state, stream_mode):
         self.state = state
-        yield from self.items
+        for item in self.items:
+            yield item
         if self.error:
             raise self.error
 
@@ -69,10 +74,10 @@ def test_query_rejects_invalid_question(question):
 
 def test_upload_accepts_supported_and_rejects_others(monkeypatch, tmp_path):
     started = []
-    monkeypatch.setattr(import_service, "UPLOAD_DIR", tmp_path)
-    monkeypatch.setattr(import_service, "run_import", lambda path: started.append(path.name))
+    monkeypatch.setattr(file_import_service, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(file_import_service, "run_import", lambda path: started.append(path.name))
     files = [("files", ("a.pdf", b"%PDF-1.4", "application/pdf")), ("files", ("b.txt", b"x", "text/plain"))]
-    resp = TestClient(import_service.app).post("/documents", files=files)
+    resp = TestClient(file_import_service.app).post("/documents", files=files)
     assert resp.status_code == 200
     result = {f["file_name"]: f["accepted"] for f in resp.json()["files"]}
     assert result == {"a.pdf": True, "b.txt": False}

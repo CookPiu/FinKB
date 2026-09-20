@@ -35,7 +35,7 @@ api/                      query_service.py（问答，端口 8001）  file_impor
 page/chat.html            聊天页面
 processor/                import_processor/  query_processor/（state.py、main_graph.py、nodes/）
 utils/                    clients/（Milvus、Mongo、MinIO、MinerU、会话）  lm/（对话、BGE-M3、精排）  其他工具函数
-common/                   config/  logging/  models/  prompt/*.prompt  answer_templates.py
+common/                   config/（各组件一个配置文件）  logging/  prompt/*.prompt  answer_templates.py
 evaluation/               评测集自检、检索评测、答案评测
 data/entities.json        实体表（手写）
 data/eval/                评测集 fin_eval_set.jsonl 与历次结果 results/
@@ -128,19 +128,19 @@ uv run python -m evaluation.runner --tag <标签> --mode answer
 
 ## 评测结果
 
-规则打分（不用 LLM 裁判），67 题 75 个轮次，存档 `data/eval/results/2026-09-19_M3-final.json`：
+规则打分（不用 LLM 裁判），67 题 75 个轮次，存档 `data/eval/results/2026-09-20_refactor-answer.json`：
 
 | 指标 | 结果 |
 |---|---|
-| 行为准确率（回答 / 拒答 / 澄清 / 不提供建议 / 时效提示是否符合预期） | 0.960 |
-| 负例拒答率 / 正例误拒率 | 0.923 / 0.036 |
+| 行为准确率（回答 / 拒答 / 澄清 / 不提供建议 / 时效提示是否符合预期） | 0.987 |
+| 负例拒答率 / 正例误拒率 | 0.923 / 0 |
 | 合规违规（禁用表达、投资建议措辞） | 0 |
 | 必含内容通过率（三份季报与统计公报的数值题全部原值命中） | 0.96 |
 | 多轮链（含澄清流程） | 4 / 4 |
-| 证据含金标原句 / 引用文件含金标文件 | 0.909 / 1.0 |
-| 延迟中位 / p90 | 7.3 s / 39.5 s（该轮评测期间精排接口多次超时；M2 同口径为 7.3 s / 17 s） |
+| 证据含金标原句 / 引用文件含金标文件 | 0.964 / 1.0 |
+| 延迟中位 / p90 | 5.7 s / 10.4 s |
 
-纯检索基线（稠密 + 稀疏 + RRF，无实体过滤与精排）：Hit@5 0.873、MRR@10 0.670，文档级 Hit@5 1.0（`2026-09-19_M1-baseline.json`）。
+纯检索基线（稠密 + 稀疏 + RRF，无实体过滤与精排）：Hit@5 0.873、MRR@10 0.670，文档级 Hit@5 1.0（`2026-09-20_refactor-after.json`，与 `2026-09-19_M1-baseline.json` 逐题一致）。
 
 LLM 输出在温度 0 下仍有波动：M2 以来各轮答案评测的行为准确率在 0.96～0.99 之间，差异主要来自规划分类与“依据不足”判断。
 

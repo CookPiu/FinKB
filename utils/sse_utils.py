@@ -1,9 +1,4 @@
-"""SSE 事件打包：event: <类型>\\ndata: <JSON>\\n\\n。"""
-
-from __future__ import annotations
-
 import json
-from typing import Any
 
 
 class SSEEvent:
@@ -13,5 +8,10 @@ class SSEEvent:
     ERROR = "error"  # 异常：面向用户的提示
 
 
-def sse_pack(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+def sse_pack(event: str, data: dict) -> str:
+    """
+    打包一条 SSE 消息：event: <类型>\\ndata: <JSON>\\n\\n
+    default=str 让 datetime 等对象也能序列化
+    """
+    payload = json.dumps(data, ensure_ascii=False, default=str)
+    return f"event: {event}\ndata: {payload}\n\n"

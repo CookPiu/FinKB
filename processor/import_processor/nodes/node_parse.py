@@ -1,72 +1,103 @@
-"""节点：解析。原件 → data/artifacts/<doc_id>/content_list.json。
-
+"""
+节点：解析。原件 → data/artifacts/<doc_id>/content_list.json。
 pdf/doc/docx 提交 MinerU；md 走本地解析。content_list.json 已存在即视为缓存命中
 （doc_id 由文件哈希生成，内容不变则产物不变），除非指定 reparse。
 MinerU 偶发 "parsing failed, please try again later"，失败后重提交。
 """
-
-from __future__ import annotations
-
 import time
 from pathlib import Path
 
 from common.logging.logger import logger, node_log
-from common.models.document import DocumentRecord, Stage
-from processor.import_processor.state import ImportGraphState
-from utils import artifact_utils as artifacts
-from utils.clients import mineru_utils as mineru
+from processor.import_processor.state import ImportGraphState, create_default_state
+from utils.artifact_utils import CONTENT_LIST, get_doc_dir, read_json, write_json
+from utils.clients.mineru_utils import SUPPORTED_EXTS, MinerUError, download_and_extract, poll_batch, submit_batch
 from utils.markdown_utils import parse_markdown
-from utils.task_utils import run_stage
+from utils.task_utils import STAGE_PARSE, is_stage_done, mark_stage_done, mark_stage_failed, mark_stage_running
 
 RETRIES = 2
 RETRY_WAIT_S = 20
 
 
-def page_count(content_list: list[dict]) -> int:
-    return max((b.get("page_idx", 0) for b in content_list), default=0) + 1
+def get_page_count(content_list: list) -> int:
+    """页数 = 最大页码下标 + 1（MinerU 的 page_idx 从 0 开始）"""
+    if not content_list:
+        return 1
+    return max([block.get("page_idx", 0) for block in content_list]) + 1
 
 
-def parse_with_mineru(doc: DocumentRecord) -> list[dict]:
+def parse_with_mineru(doc: dict) -> list:
     """提交 MinerU 并等待结果（含失败重提交），返回 content_list。"""
-    f = mineru.MinerUFile(data_id=doc.doc_id, path=Path(doc.local_path))
+    doc_id = doc["doc_id"]
+    file = {"data_id": doc_id, "path": Path(doc["local_path"])}
     error = ""
     for attempt in range(1 + RETRIES):
         if attempt:
-            logger.warning("%s 解析失败（%s），%ds 后重提交（第 %d 次重试）", doc.file_name, error, RETRY_WAIT_S, attempt)
+            logger.warning(f"{doc['file_name']} 解析失败（{error}），{RETRY_WAIT_S}s 后重提交（第 {attempt} 次重试）")
             time.sleep(RETRY_WAIT_S)
         try:
-            batch_id = mineru.submit_batch([f])
-        except Exception as e:  # noqa: BLE001 - 提交失败同样重试
+            batch_id = submit_batch([file])
+        except Exception as e:  # 提交失败同样重试
             error = f"提交失败：{e}"
             continue
-        r = mineru.poll_batch(batch_id, [doc.doc_id]).get(doc.doc_id)
-        if r is not None and r.state == "done" and r.zip_url:
-            return artifacts.read_json(mineru.download_and_extract(r.zip_url, artifacts.doc_dir(doc.doc_id)))
-        error = f"MinerU 状态 {r.state if r else 'missing'}：{r.error if r else ''}"
-    raise mineru.MinerUError(error)
+        result = poll_batch(batch_id, [doc_id]).get(doc_id)
+        if result is not None and result["state"] == "done" and result["zip_url"]:
+            return read_json(download_and_extract(result["zip_url"], get_doc_dir(doc_id)))
+        if result is None:
+            error = "MinerU 状态 missing："
+        else:
+            error = f"MinerU 状态 {result['state']}：{result['error']}"
+    raise MinerUError(error)
+
+
+def parse_document(doc: dict, reparse: bool) -> int:
+    """
+    解析原件并落盘 content_list.json（已有缓存且不要求重解析时直接复用）
+    :return: 页数
+    """
+    out_path = get_doc_dir(doc["doc_id"]) / CONTENT_LIST
+    if out_path.exists() and not reparse:
+        logger.info(f"parse     缓存命中 {doc['file_name']}")
+        return get_page_count(read_json(out_path))
+    src = Path(doc["local_path"])
+    if not src.is_file():
+        raise FileNotFoundError(f"原件不存在：{src}")
+    if doc["file_ext"] == ".md":
+        content = parse_markdown(src.read_text(encoding="utf-8"))
+    elif doc["file_ext"] in SUPPORTED_EXTS:
+        content = parse_with_mineru(doc)
+    else:
+        raise ValueError(f"不支持的格式 {doc['file_ext']}")
+    write_json(out_path, content)
+    logger.info(f"parse     {doc['file_name']}（{len(content)} 块）")
+    return get_page_count(content)
 
 
 @node_log("node_parse")
-def node_parse(state: ImportGraphState) -> dict:
-    doc: DocumentRecord = state["doc"]
+def node_parse(state: ImportGraphState):
+    """
+    节点功能：把原件解析成 content_list.json，记录页数。
+    上游 node_entry，下游 node_normalize；parse 阶段已完成则跳过（断点续跑）。
+    """
+    doc = state["doc"]
+    if is_stage_done(doc, STAGE_PARSE):
+        logger.info(f"parse     跳过（已完成） {doc['file_name']}")
+        return state
+    mark_stage_running(doc)
+    try:
+        page_count = parse_document(doc, state.get("reparse"))
+    except Exception as e:
+        mark_stage_failed(doc, STAGE_PARSE, e)
+        raise
+    mark_stage_done(doc, STAGE_PARSE, {"page_count": page_count})
+    return state
 
-    def parse(d: DocumentRecord) -> dict:
-        out = artifacts.doc_dir(d.doc_id) / artifacts.CONTENT_LIST
-        if out.exists() and not state.get("reparse"):
-            logger.info("parse     缓存命中 %s", d.file_name)
-            return {"page_count": page_count(artifacts.read_json(out))}
-        src = Path(d.local_path)
-        if not src.is_file():
-            raise FileNotFoundError(f"原件不存在：{src}")
-        if d.file_ext == ".md":
-            content = parse_markdown(src.read_text(encoding="utf-8"))
-        elif d.file_ext in mineru.SUPPORTED_EXTS:
-            content = parse_with_mineru(d)
-        else:
-            raise ValueError(f"不支持的格式 {d.file_ext}")
-        artifacts.write_json(out, content)
-        logger.info("parse     %s（%d 块）", d.file_name, len(content))
-        return {"page_count": page_count(content)}
 
-    run_stage(doc, Stage.PARSE, parse)
-    return {"doc": doc}
+if __name__ == "__main__":
+    # 运行：uv run python -m processor.import_processor.nodes.node_parse <doc_id>
+    # 依赖 Mongo（读取文档记录）；parse 已完成的文档只会跳过，未完成的会调用 MinerU 并写进度
+    import sys
+
+    from processor.import_processor.nodes.node_entry import load_document
+
+    result = node_parse(create_default_state(doc=load_document(sys.argv[1])))
+    logger.info(f"stage={result['doc']['stage']} page_count={result['doc']['page_count']}")

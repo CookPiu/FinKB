@@ -1,60 +1,53 @@
-"""MinIO 客户端单例：存放原始文件，供前端按 source_path 打开原件。"""
-
-from __future__ import annotations
-
 import json
-import threading
-from pathlib import Path
 from urllib.parse import quote
 
 from minio import Minio
 from minio.error import S3Error
 
-from common.config.settings import get_settings
+from common.config.minio_config import minio_config
 
-_client: Minio | None = None
-_lock = threading.Lock()
+# 全局 MinIO 客户端单例
+_minio_client = None
+
+
+def get_minio_client():
+    """
+    获取 MinIO 客户端单例；首次调用时确保桶存在并设为公共读（原件要能在浏览器里直接打开）
+    """
+    global _minio_client
+    if _minio_client is None:
+        client = Minio(
+            minio_config.endpoint,
+            access_key=minio_config.access_key,
+            secret_key=minio_config.secret_key,
+            secure=minio_config.secure,
+        )
+        if not client.bucket_exists(minio_config.bucket):
+            client.make_bucket(minio_config.bucket)
+            client.set_bucket_policy(minio_config.bucket, _public_read_policy(minio_config.bucket))
+        _minio_client = client
+    return _minio_client
 
 
 def _public_read_policy(bucket: str) -> str:
-    return json.dumps(
-        {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {"AWS": "*"},
-                    "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{bucket}/*",
-                }
-            ],
-        }
-    )
-
-
-def get_client() -> Minio:
-    """返回客户端；首次调用时确保桶存在并设为公共读（原件需能在浏览器直接打开）。"""
-    global _client
-    if _client is None:
-        with _lock:
-            if _client is None:
-                s = get_settings()
-                client = Minio(
-                    s.minio_endpoint,
-                    access_key=s.minio_access_key,
-                    secret_key=s.minio_secret_key,
-                    secure=s.minio_secure,
-                )
-                if not client.bucket_exists(s.minio_bucket):
-                    client.make_bucket(s.minio_bucket)
-                    client.set_bucket_policy(s.minio_bucket, _public_read_policy(s.minio_bucket))
-                _client = client
-    return _client
+    """桶策略：任何人都可以读取对象（不能列目录、不能写）"""
+    policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"AWS": "*"},
+                "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{bucket}/*",
+            }
+        ],
+    }
+    return json.dumps(policy)
 
 
 def object_exists(object_name: str) -> bool:
     try:
-        get_client().stat_object(get_settings().minio_bucket, object_name)
+        get_minio_client().stat_object(minio_config.bucket, object_name)
         return True
     except S3Error as e:
         if e.code in ("NoSuchKey", "NoSuchObject"):
@@ -62,14 +55,19 @@ def object_exists(object_name: str) -> bool:
         raise
 
 
-def upload_file(object_name: str, local_path: Path) -> str:
-    """上传本地文件（已存在则跳过），返回公共访问 URL。"""
+def upload_file(object_name: str, local_path) -> str:
+    """
+    上传本地文件（对象已存在则跳过）
+    :param object_name: 桶内路径，如 originals/<doc_id>/<文件名>
+    :param local_path: 本地文件路径
+    :return: 公共访问 URL
+    """
     if not object_exists(object_name):
-        get_client().fput_object(get_settings().minio_bucket, object_name, str(local_path))
-    return public_url(object_name)
+        get_minio_client().fput_object(minio_config.bucket, object_name, str(local_path))
+    return get_public_url(object_name)
 
 
-def public_url(object_name: str) -> str:
-    s = get_settings()
-    scheme = "https" if s.minio_secure else "http"
-    return f"{scheme}://{s.minio_endpoint}/{s.minio_bucket}/{quote(object_name)}"
+def get_public_url(object_name: str) -> str:
+    scheme = "https" if minio_config.secure else "http"
+    # 文件名含中文、空格，需要 URL 编码
+    return f"{scheme}://{minio_config.endpoint}/{minio_config.bucket}/{quote(object_name)}"

@@ -1,118 +1,195 @@
 """节点：入口（register）。计算哈希、判定新增 / 续跑 / 跳过、原件上传 MinIO、写 documents 记录。"""
-
-from __future__ import annotations
-
 import hashlib
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timezone
 from pathlib import Path
 
 from common.logging.logger import logger, node_log
-from common.models.document import STAGE_ORDER, DocStatus, DocumentRecord, Stage
-from processor.import_processor.state import ImportGraphState
-from utils import artifact_utils as artifacts
-from utils.classify_utils import guess_content_type, title_from_filename
-from utils.clients import minio_utils as minio
-from utils.clients import mongo_utils as mongo
+from processor.import_processor.state import ImportGraphState, create_default_state
+from utils.artifact_utils import get_doc_dir
+from utils.classify_utils import CONTENT_TYPE_OTHER, guess_content_type, title_from_filename
+from utils.clients.minio_utils import upload_file
+from utils.clients.mongo_utils import get_db
+from utils.task_utils import STAGE_ORDER, STAGE_REGISTER, STATUS_PENDING, STATUS_READY, STATUS_SUPERSEDED
+
+# 登记结果
+ACTION_NEW = "new"  # 首次导入
+ACTION_RESUME = "resume"  # 上次未完成，从断点继续
+ACTION_FORCE = "force"  # 已就绪但要求从头重建
+ACTION_SKIP = "skip"  # 同哈希已就绪，跳过
+
+# documents 记录的全部字段（_id 即 doc_id），按写入顺序排列
+DOC_FIELDS = [
+    "_id", "doc_id", "file_name", "file_ext", "file_hash", "file_size", "rel_dir", "local_path", "source_path",
+    "content_type", "content_type_source", "document_title", "version", "stage", "status", "error",
+    "artifacts_dir", "page_count", "chunk_count", "supersedes", "institution_name", "publish_date",
+    "report_period", "entity_ids", "summary", "created_at", "updated_at",
+]
+
+# 有默认值的字段：读到缺少这些字段的旧记录时补齐
+DOC_DEFAULTS = {
+    "rel_dir": "",
+    "source_path": "",
+    "content_type": CONTENT_TYPE_OTHER,
+    "content_type_source": "dir_rule",
+    "version": 0,  # 切片版本：chunk 阶段每次产出新切片集时 +1；index 先写新版本再删旧版本
+    "stage": None,  # 最后完成的阶段
+    "status": STATUS_PENDING,
+    "error": None,
+    "page_count": None,
+    "chunk_count": None,
+    "supersedes": [],
+    # 以下字段由 enrich 阶段填充
+    "institution_name": None,
+    "publish_date": None,
+    "report_period": None,
+    "entity_ids": [],
+    "summary": None,
+}
 
 
-class RegisterAction(StrEnum):
-    NEW = "new"  # 首次导入
-    RESUME = "resume"  # 上次未完成，从断点继续
-    FORCE = "force"  # 已就绪但要求从头重建
-    SKIP = "skip"  # 同哈希已就绪，跳过
-
-
-def file_sha256(path: Path) -> str:
-    h = hashlib.sha256()
+def get_file_sha256(path: Path) -> str:
+    """分块读取文件计算 SHA-256，避免大文件一次读入内存"""
+    sha256 = hashlib.sha256()
     with path.open("rb") as fh:
-        for block in iter(lambda: fh.read(1 << 20), b""):
-            h.update(block)
-    return h.hexdigest()
+        while True:
+            block = fh.read(1 << 20)
+            if not block:
+                break
+            sha256.update(block)
+    return sha256.hexdigest()
 
 
-def doc_id_from_hash(file_hash: str) -> str:
+def build_doc_id(file_hash: str) -> str:
+    """doc_id 取文件哈希前 16 位：内容不变则 doc_id 不变，解析缓存与切片 ID 都能复用"""
     return file_hash[:16]
 
 
-def to_mongo(rec: DocumentRecord) -> dict:
-    d = rec.model_dump(mode="json")
-    d["created_at"], d["updated_at"] = rec.created_at, rec.updated_at
-    d["_id"] = rec.doc_id
-    return d
+def load_document(doc_id: str):
+    """
+    从 Mongo 读取文档记录，缺少的可选字段补默认值
+    :return: 文档记录 dict；不存在时返回 None
+    """
+    doc = get_db().documents.find_one({"_id": doc_id})
+    if not doc:
+        return None
+    for key, value in DOC_DEFAULTS.items():
+        if key not in doc:
+            doc[key] = list(value) if isinstance(value, list) else value
+    return doc
 
 
-def load(doc_id: str) -> DocumentRecord | None:
-    raw = mongo.get_db().documents.find_one({"_id": doc_id})
-    return DocumentRecord.model_validate(raw) if raw else None
+def to_mongo(doc: dict) -> dict:
+    """整条写回 Mongo 时只保留文档记录的字段"""
+    record = {}
+    for key in DOC_FIELDS:
+        record[key] = doc[key]
+    return record
 
 
-def register(path: Path, root: Path, *, force: bool = False) -> tuple[DocumentRecord, RegisterAction]:
-    db = mongo.get_db()
-    file_hash = file_sha256(path)
-    doc_id = doc_id_from_hash(file_hash)
-    now = datetime.now(UTC)
+def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
+    """为首次导入的文件建立文档记录：原件上传 MinIO，查出将被替换的同名旧文档"""
+    doc_id = build_doc_id(file_hash)
+    if path.parent != root:
+        rel_dir = path.parent.relative_to(root).as_posix()
+    else:
+        rel_dir = ""
+    source_path = upload_file(f"originals/{doc_id}/{path.name}", path)
+    # 同名文件内容变化：新文档就绪后替换旧文档（入库节点删除旧切片）
+    supersedes = []
+    old_docs = get_db().documents.find(
+        {"file_name": path.name, "_id": {"$ne": doc_id}, "status": {"$ne": STATUS_SUPERSEDED}}, {"_id": 1}
+    )
+    for old in old_docs:
+        supersedes.append(old["_id"])
+    return {
+        "_id": doc_id,
+        "doc_id": doc_id,
+        "file_name": path.name,
+        "file_ext": path.suffix.lower(),
+        "file_hash": file_hash,
+        "file_size": path.stat().st_size,
+        "rel_dir": rel_dir,
+        "local_path": str(path),
+        "source_path": source_path,
+        "content_type": guess_content_type(rel_dir, path.name),
+        "content_type_source": "dir_rule",
+        "document_title": title_from_filename(path.stem),
+        "version": 0,
+        "stage": STAGE_REGISTER,
+        "status": STATUS_PENDING,
+        "error": None,
+        "artifacts_dir": str(get_doc_dir(doc_id)),
+        "page_count": None,
+        "chunk_count": None,
+        "supersedes": supersedes,
+        "institution_name": None,
+        "publish_date": None,
+        "report_period": None,
+        "entity_ids": [],
+        "summary": None,
+        "created_at": now,
+        "updated_at": now,
+    }
 
-    existing = load(doc_id)
+
+def register_document(path: Path, root: Path, force: bool = False):
+    """
+    登记文件，判定本次要做的动作
+    :return: (文档记录, 动作 new / resume / force / skip)
+    """
+    db = get_db()
+    file_hash = get_file_sha256(path)
+    doc_id = build_doc_id(file_hash)
+    now = datetime.now(timezone.utc)
+
+    existing = load_document(doc_id)
     if existing is not None:
         # 流水线新增了阶段时，旧的“就绪”文档只补跑新阶段
-        complete = existing.status == DocStatus.READY and existing.stage == STAGE_ORDER[-1]
+        complete = existing["status"] == STATUS_READY and existing["stage"] == STAGE_ORDER[-1]
         if complete and not force:
-            return existing, RegisterAction.SKIP
-        if force and existing.status == DocStatus.READY:
+            return existing, ACTION_SKIP
+        if force and existing["status"] == STATUS_READY:
             # 版本号由切分节点递增（每产生一套新切片即一个新版本）
-            existing.stage = Stage.REGISTER
-            existing.status = DocStatus.PENDING
-            existing.error = None
-            existing.updated_at = now
+            existing["stage"] = STAGE_REGISTER
+            existing["status"] = STATUS_PENDING
+            existing["error"] = None
+            existing["updated_at"] = now
             db.documents.replace_one({"_id": doc_id}, to_mongo(existing))
-            return existing, RegisterAction.FORCE
+            return existing, ACTION_FORCE
         # 未完成：文件路径可能变化，刷新本地路径后从断点继续
-        existing.local_path = str(path)
+        existing["local_path"] = str(path)
         db.documents.update_one({"_id": doc_id}, {"$set": {"local_path": str(path), "updated_at": now}})
-        return existing, RegisterAction.RESUME
+        return existing, ACTION_RESUME
 
-    rel_dir = path.parent.relative_to(root).as_posix() if path.parent != root else ""
-    source_path = minio.upload_file(f"originals/{doc_id}/{path.name}", path)
-    # 同名文件内容变化：新文档就绪后替换旧文档（入库节点删除旧切片）
-    supersedes = [
-        d["_id"]
-        for d in db.documents.find(
-            {"file_name": path.name, "_id": {"$ne": doc_id}, "status": {"$ne": DocStatus.SUPERSEDED.value}},
-            {"_id": 1},
-        )
-    ]
-    rec = DocumentRecord(
-        doc_id=doc_id,
-        file_name=path.name,
-        file_ext=path.suffix.lower(),
-        file_hash=file_hash,
-        file_size=path.stat().st_size,
-        rel_dir=rel_dir,
-        local_path=str(path),
-        source_path=source_path,
-        content_type=guess_content_type(rel_dir, path.name),
-        content_type_source="dir_rule",
-        document_title=title_from_filename(path.stem),
-        version=0,
-        stage=Stage.REGISTER,
-        status=DocStatus.PENDING,
-        artifacts_dir=str(artifacts.doc_dir(doc_id)),
-        supersedes=supersedes,
-        created_at=now,
-        updated_at=now,
-    )
-    db.documents.insert_one(to_mongo(rec))
-    if supersedes:
-        logger.info("%s 内容已变化，就绪后将替换旧文档 %s", path.name, supersedes)
-    return rec, RegisterAction.NEW
+    doc = build_new_document(path, root, file_hash, now)
+    db.documents.insert_one(to_mongo(doc))
+    if doc["supersedes"]:
+        logger.info(f"{path.name} 内容已变化，就绪后将替换旧文档 {doc['supersedes']}")
+    return doc, ACTION_NEW
 
 
 @node_log("node_entry")
-def node_entry(state: ImportGraphState) -> dict:
+def node_entry(state: ImportGraphState):
+    """
+    节点功能：登记待导入文件，决定后续流程。
+    同哈希且已就绪 → skip（路由直接结束）；未完成 → resume（后续节点按 documents.stage 跳过已完成阶段）；
+    --force 且已就绪 → force（阶段重置为 register）；新文件 → new（上传原件、写入 documents 记录）。
+    """
     path = Path(state["local_file_path"])
     root = Path(state.get("root_dir") or path.parent)
-    doc, action = register(path, root, force=state.get("force", False))
-    if action != RegisterAction.SKIP:
-        logger.info("%-9s %s（%s）", "register", doc.file_name, action.value)
-    return {"doc": doc, "action": action.value, "file_name": doc.file_name}
+    doc, action = register_document(path, root, state.get("force", False))
+    if action != ACTION_SKIP:
+        logger.info(f"register  {doc['file_name']}（{action}）")
+    state["doc"] = doc
+    state["action"] = action
+    state["file_name"] = doc["file_name"]
+    return state
+
+
+if __name__ == "__main__":
+    # 运行：uv run python -m processor.import_processor.nodes.node_entry <文件路径>
+    # 依赖 Mongo、MinIO；新文件会写入 documents 记录并上传原件，已就绪的文件只返回 skip
+    import sys
+
+    result = node_entry(create_default_state(local_file_path=sys.argv[1]))
+    logger.info(f"action={result['action']} doc_id={result['doc']['doc_id']} stage={result['doc']['stage']}")

@@ -58,24 +58,24 @@ def test_heading_stack_builds_paths_from_flat_levels():
     hs.push("1.5.2 零售业务", 2)
     hs.push("（2）大财富管理业务", 2)
     hs.push("存款业务", 2)  # 无编号：挂在最近的有编号标题下
-    assert hs.path == ["第一节 主要财务数据", "1.5 管理层讨论与分析", "1.5.2 零售业务", "（2）大财富管理业务", "存款业务"]
+    assert hs.get_path() == ["第一节 主要财务数据", "1.5 管理层讨论与分析", "1.5.2 零售业务", "（2）大财富管理业务", "存款业务"]
     hs.push("私行财富", 2)  # 同级无编号标题互为兄弟
-    assert hs.path[-2:] == ["（2）大财富管理业务", "私行财富"]
+    assert hs.get_path()[-2:] == ["（2）大财富管理业务", "私行财富"]
     hs.push("1.5.3 对公业务", 2)
-    assert hs.path == ["第一节 主要财务数据", "1.5 管理层讨论与分析", "1.5.3 对公业务"]
+    assert hs.get_path() == ["第一节 主要财务数据", "1.5 管理层讨论与分析", "1.5.3 对公业务"]
 
 
 def test_orphan_unnumbered_heading_is_popped_by_numbered():
     hs = HeadingStack()
     hs.push("平安银行2026年第一季度报告", 1)
     hs.push("重要内容提示", 2)
-    assert hs.path == ["重要内容提示"]
+    assert hs.get_path() == ["重要内容提示"]
     hs.push("第一节 主要财务数据", 2)
-    assert hs.path == ["第一节 主要财务数据"]
+    assert hs.get_path() == ["第一节 主要财务数据"]
     hs.push("2 主要财务数据", 2)
-    assert hs.path == ["2 主要财务数据"]
+    assert hs.get_path() == ["2 主要财务数据"]
     hs.push("2.1 本集团主要会计数据及财务指标", 2)
-    assert hs.path == ["2 主要财务数据", "2.1 本集团主要会计数据及财务指标"]
+    assert hs.get_path() == ["2 主要财务数据", "2.1 本集团主要会计数据及财务指标"]
 
 
 def test_title_not_in_path_and_second_level1_starts_subdocument():
@@ -89,9 +89,9 @@ def test_title_not_in_path_and_second_level1_starts_subdocument():
             t("正文二。", page=3),
         ]
     )
-    texts = [b for b in blocks if b.type == "text"]
-    assert texts[0].section_path == ["一、风险说明"]
-    assert texts[1].section_path == ["理财产品说明书", "一、产品要素"]
+    texts = [b for b in blocks if b["type"] == "text"]
+    assert texts[0]["section_path"] == ["一、风险说明"]
+    assert texts[1]["section_path"] == ["理财产品说明书", "一、产品要素"]
 
 
 def test_drops_page_furniture_and_merges_paragraph_across_pages():
@@ -104,11 +104,11 @@ def test_drops_page_furniture_and_merges_paragraph_across_pages():
             t("基金的过往业绩不代表未来表现。", page=4),
         ]
     )
-    assert [b.text for b in blocks] == [
+    assert [b["text"] for b in blocks] == [
         "基金管理人依照恪尽职守的原则管理基金财产，但不保证基金一定盈利，也不保证最低收益。",
         "基金的过往业绩不代表未来表现。",
     ]
-    assert blocks[0].page == 4 and blocks[0].page_end == 5
+    assert blocks[0]["page"] == 4 and blocks[0]["page_end"] == 5
 
 
 def test_page_footnote_does_not_break_paragraph_merge():
@@ -119,8 +119,8 @@ def test_page_footnote_does_not_break_paragraph_merge():
             t("1.3亿户。", page=7),
         ]
     )
-    assert blocks[0].text == "零售客户数达到1.3亿户。"
-    assert blocks[1].text == "注：1 零售客户数包含借记卡。"
+    assert blocks[0]["text"] == "零售客户数达到1.3亿户。"
+    assert blocks[1]["text"] == "注：1 零售客户数包含借记卡。"
 
 
 def test_unit_line_absorbed_and_empty_continuation_extends_pages():
@@ -134,10 +134,10 @@ def test_unit_line_absorbed_and_empty_continuation_extends_pages():
         ]
     )
     unit, table = blocks[1], blocks[2]
-    assert unit.absorbed
-    assert table.context == "单位：元 币种：人民币"
-    assert table.page == 1 and table.page_end == 2
-    assert table.section_path == ["(一)主要会计数据和财务指标"]
+    assert unit["absorbed"]
+    assert table["context"] == "单位：元 币种：人民币"
+    assert table["page"] == 1 and table["page_end"] == 2
+    assert table["section_path"] == ["(一)主要会计数据和财务指标"]
 
 
 def test_bracketed_unit_line_and_inheritance_within_section():
@@ -151,10 +151,10 @@ def test_bracketed_unit_line_and_inheritance_within_section():
             {"type": "table", "table_body": TABLE, "page_idx": 0},
         ]
     )
-    tables = [b for b in blocks if b.type == "table"]
-    assert tables[0].context == "（货币单位：人民币百万元）"
-    assert tables[1].context == "（货币单位：人民币百万元）"  # 同一小节沿用
-    assert tables[2].context == ""  # 换了小节不再沿用
+    tables = [b for b in blocks if b["type"] == "table"]
+    assert tables[0]["context"] == "（货币单位：人民币百万元）"
+    assert tables[1]["context"] == "（货币单位：人民币百万元）"  # 同一小节沿用
+    assert tables[2]["context"] == ""  # 换了小节不再沿用
 
 
 def test_unmerged_cross_page_table_is_merged():
@@ -167,12 +167,12 @@ def test_unmerged_cross_page_table_is_merged():
         ]
     )
     assert len(blocks) == 1
-    assert "净利润" in blocks[0].table_html and blocks[0].page_end == 2
+    assert "净利润" in blocks[0]["table_html"] and blocks[0]["page_end"] == 2
 
 
 def test_heading_like_fragments_become_text():
     blocks = normalize([t("理财产品过往业绩不代表其未来表现，", level=2), t("√适用 □不适用", level=2)])
-    assert [b.type for b in blocks] == ["text", "text"]
+    assert [b["type"] for b in blocks] == ["text", "text"]
 
 
 def test_image_size_png(tmp_path):

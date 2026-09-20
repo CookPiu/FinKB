@@ -1,12 +1,13 @@
-"""流式事件：节点通过 LangGraph custom stream 发出 {"type": "delta"|"sources"|"final", ...}。"""
-
-from __future__ import annotations
-
 from langgraph.config import get_stream_writer
 
 
-def emit(event: dict) -> None:
+def emit(event: dict):
+    """
+    节点向外推送流式事件 {"type": "delta" | "sources" | "final", ...}
+    图以 stream_mode="custom" 运行时，事件由 query_app.stream 逐条产出；invoke 运行时没有 writer，直接忽略
+    """
     try:
-        get_stream_writer()(event)
-    except RuntimeError:  # 不在 stream 模式下运行时没有 writer
+        writer = get_stream_writer()
+        writer(event)
+    except RuntimeError:
         pass

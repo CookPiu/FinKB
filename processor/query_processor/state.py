@@ -1,37 +1,14 @@
-"""查询图的状态与查询计划。"""
-
-from __future__ import annotations
-
+"""
+查询图的状态
+plan（查询计划，node_query_plan 产出）为 dict：standalone_query 补全指代后的独立问题、intent 意图、
+entity_mentions 问题里提到的实体、metrics 财务指标名、wants_summary 是否在问资料的主要内容。
+"""
 import copy
-from typing import Literal, TypedDict
-
-from pydantic import BaseModel, Field
-
-Intent = Literal[
-    "product_info",
-    "risk",
-    "knowledge",
-    "announcement",
-    "market_policy",
-    "process",
-    "investment_advice",
-    "realtime",
-    "out_of_scope",
-    "chitchat",
-]
+from typing import TypedDict
 
 
-class QueryPlan(BaseModel):
-    """规划节点的输出：一次 LLM 调用得到，pydantic 校验；执行由后续节点按计划进行。"""
-
-    standalone_query: str
-    intent: Intent = "knowledge"
-    entity_mentions: list[str] = Field(default_factory=list)
-    metrics: list[str] = Field(default_factory=list)
-    wants_summary: bool = False
-
-
-class QueryGraphState(TypedDict, total=False):
+class QueryGraphState(TypedDict):
+    """查询流程中流转的数据，节点用 state["键"] / state.get("键") 读写"""
     session_id: str
     original_query: str
 
@@ -41,7 +18,7 @@ class QueryGraphState(TypedDict, total=False):
     clarified: bool  # 本轮是对澄清问题的回答，实体已由代码确定
 
     # 规划与实体确认
-    plan: dict  # QueryPlan.model_dump()
+    plan: dict  # 查询计划，键见模块说明
     entity_ids: list
     candidate_ids: list  # 有歧义时的候选
     doc_ids: list  # 实体对应的文档，用于检索过滤
@@ -49,11 +26,11 @@ class QueryGraphState(TypedDict, total=False):
     # 取证（三个节点并行写入各自字段）
     facts: list
     summaries: list
-    embedding_chunks: list  # SearchHit 字典
+    embedding_chunks: list  # 语义检索命中 dict（见 utils/search_utils.py）
     top_dense: float
 
     # 精排与回答
-    evidence: list  # Evidence 字典
+    evidence: list  # 证据 dict（见 utils/citation_utils.py）
     kind: str  # answer / refuse / clarify / decline_advice / realtime_notice / chitchat
     answer: str
     sources: list
@@ -83,6 +60,7 @@ query_graph_default_state: QueryGraphState = {
 
 
 def create_query_default_state(**overrides) -> QueryGraphState:
+    """创建查询图的初始状态（深拷贝默认值），可覆盖任意字段"""
     state = copy.deepcopy(query_graph_default_state)
     state.update(overrides)
     return state
