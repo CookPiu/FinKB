@@ -1,6 +1,6 @@
 """
 导入图的状态：一次图执行处理一个文件。
-大块中间产物落盘在 data/artifacts/<doc_id>/，状态里只放文档记录、切片与向量。
+大块中间产物落盘在 data/artifacts/<doc_id>/，切片与向量只在节点内部传递，状态里只放文档记录与本次导入的参数。
 """
 import copy
 from typing import TypedDict
@@ -16,11 +16,7 @@ class ImportGraphState(TypedDict):
 
     # --- node_entry 写入 ---
     doc: dict  # 文档记录（Mongo documents 中的一条）
-    action: str  # new / resume / force / skip
-
-    # --- node_bge_embedding → node_import_milvus ---
-    chunks: list  # 切片（chunks.json 的内容）
-    embeddings_content: list  # 与 chunks 一一对应的 {"dense", "sparse"}
+    action: str  # new / redo / skip
 
 
 graph_default_state: ImportGraphState = {
@@ -32,8 +28,6 @@ graph_default_state: ImportGraphState = {
     "reparse": False,
     "doc": None,
     "action": "",
-    "chunks": [],
-    "embeddings_content": [],
 }
 
 

@@ -153,7 +153,7 @@ def validate_and_get_data(state: ImportGraphState):
 def node_enrich(state: ImportGraphState):
     """
     节点功能：公司定期报告抽取财务指标事实写入 financial_facts；每份文档生成摘要写入 documents.summary。
-    上游 node_import_milvus；导入图的最后一个节点，跑完文档状态变为 ready。
+    上游 node_index；导入图的最后一个节点，跑完文档状态变为 ready。
     """
     doc = validate_and_get_data(state)
     summary = enrich_document(doc)

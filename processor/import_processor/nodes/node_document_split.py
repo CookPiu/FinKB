@@ -243,7 +243,7 @@ def validate_and_get_data(state: ImportGraphState):
 def node_document_split(state: ImportGraphState):
     """
     节点功能：把版面块 blocks.json 切成检索切片 chunks.json，并把文档版本号 +1。
-    上游 node_normalize；下游 node_bge_embedding 读取 chunks.json 计算向量。
+    上游 node_normalize；下游 node_index 读取 chunks.json 计算向量并写入 Milvus。
     """
     doc = validate_and_get_data(state)
     chunk_count = split_document(doc["doc_id"])

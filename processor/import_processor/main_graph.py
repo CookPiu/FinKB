@@ -1,6 +1,6 @@
 """
 导入图（LangGraph）：一次执行处理一个文件。
-node_entry → node_parse → node_normalize → node_document_split → node_bge_embedding → node_import_milvus → node_enrich
+node_entry → node_parse → node_normalize → node_document_split → node_index → node_enrich
 
 一次导入从头跑到尾：同哈希且已就绪的文件在 node_entry 判定为 skip 直接结束，其余整条流水线重做
 （解析结果按文件哈希缓存在 data/artifacts，重做不会重复调用 MinerU）。
@@ -12,11 +12,10 @@ from pathlib import Path
 from langgraph.graph import END, StateGraph
 
 from common.logging.logger import logger
-from processor.import_processor.nodes.node_bge_embedding import node_bge_embedding
 from processor.import_processor.nodes.node_document_split import node_document_split
 from processor.import_processor.nodes.node_enrich import node_enrich
 from processor.import_processor.nodes.node_entry import ACTION_SKIP, build_doc_id, get_file_sha256, node_entry
-from processor.import_processor.nodes.node_import_milvus import node_import_milvus
+from processor.import_processor.nodes.node_index import node_index
 from processor.import_processor.nodes.node_normalize import node_normalize
 from processor.import_processor.nodes.node_parse import node_parse
 from processor.import_processor.state import ImportGraphState, create_default_state
@@ -29,8 +28,7 @@ workflow.add_node("node_entry", node_entry)
 workflow.add_node("node_parse", node_parse)
 workflow.add_node("node_normalize", node_normalize)
 workflow.add_node("node_document_split", node_document_split)
-workflow.add_node("node_bge_embedding", node_bge_embedding)
-workflow.add_node("node_import_milvus", node_import_milvus)
+workflow.add_node("node_index", node_index)
 workflow.add_node("node_enrich", node_enrich)
 workflow.set_entry_point("node_entry")
 
@@ -46,9 +44,8 @@ def route_after_entry(state: ImportGraphState) -> str:
 workflow.add_conditional_edges("node_entry", route_after_entry, {"node_parse": "node_parse", END: END})
 workflow.add_edge("node_parse", "node_normalize")
 workflow.add_edge("node_normalize", "node_document_split")
-workflow.add_edge("node_document_split", "node_bge_embedding")
-workflow.add_edge("node_bge_embedding", "node_import_milvus")
-workflow.add_edge("node_import_milvus", "node_enrich")
+workflow.add_edge("node_document_split", "node_index")
+workflow.add_edge("node_index", "node_enrich")
 workflow.add_edge("node_enrich", END)
 
 # 3. 编译成可执行的图

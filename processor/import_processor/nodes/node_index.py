@@ -1,10 +1,14 @@
 """
-节点：写入 Milvus fin_chunks。
+节点：建立索引。chunks.json → BGE-M3 稠密 + 稀疏向量 → 写入 Milvus fin_chunks。
+嵌入文本 = 资料名称 · 内容类型 · 章节路径 + 正文（表格为线性化文本）。
 写入顺序：先 upsert 当前版本（chunk_id 确定性生成，重跑幂等），再删除该文档其他版本和被替换文档的切片，
 避免“先删后插”中途失败导致文档短暂或永久缺失。
 """
+import time
+
 from common.logging.logger import logger, node_log, step_log
-from processor.import_processor.state import ImportGraphState
+from processor.import_processor.state import ImportGraphState, create_default_state
+from utils.artifact_utils import CHUNKS, get_doc_dir, read_json
 from utils.clients.milvus_utils import (
     SECTION_MAX_LEN,
     TEXT_MAX_LEN,
@@ -15,7 +19,18 @@ from utils.clients.milvus_utils import (
     upsert_rows,
 )
 from utils.clients.mongo_utils import get_db
+from utils.lm.embedding_utils import generate_embeddings
 from utils.task_utils import STATUS_SUPERSEDED, save_doc_fields
+
+
+def build_embed_text(doc: dict, chunk: dict) -> str:
+    """资料名称、内容类型、章节路径作为抬头（空的跳过），换行后接正文"""
+    head_parts = []
+    for part in (doc["document_title"], doc["content_type"], chunk["section_path"]):
+        if part:
+            head_parts.append(part)
+    head = " · ".join(head_parts)
+    return f"{head}\n{chunk['embed_body']}"
 
 
 def build_chunk_id(doc: dict, seq: int) -> str:
@@ -76,6 +91,15 @@ def retire_superseded(doc: dict):
         logger.info(f"旧文档 {old_id} 已被 {doc['file_name']} 替换")
 
 
+@step_log("encode_chunks")
+def encode_chunks(doc: dict, chunks: list) -> list:
+    """批量编码切片，返回与 chunks 一一对应的 {"dense", "sparse"}"""
+    start_ts = time.perf_counter()
+    vectors = generate_embeddings([build_embed_text(doc, chunk) for chunk in chunks])
+    logger.info(f"embedding {doc['file_name']}：{len(chunks)} 个切片，编码 {time.perf_counter() - start_ts:.1f}s")
+    return vectors
+
+
 @step_log("import_to_milvus")
 def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     """
@@ -97,39 +121,40 @@ def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
 @step_log("validate_and_get_data")
 def validate_and_get_data(state: ImportGraphState):
     """
-    取出并校验入库所需的入参
-    :return: 元组 (文档记录, 切片列表, 向量列表)
-    :raise ValueError: 文档记录、切片或向量缺失（上游节点未执行）
+    取出并校验建索引所需的入参
+    :return: 元组 (文档记录, 切片列表)
+    :raise ValueError: 状态里没有文档记录，或 chunks.json 为空
     """
     doc = state.get("doc")
-    chunks = state.get("chunks") or []
-    vectors = state.get("embeddings_content") or []
-    if not doc or not chunks or not vectors:
-        logger.error("doc, chunks or embeddings_content is empty, cannot import to milvus.")
-        raise ValueError("doc, chunks or embeddings_content is empty, cannot import to milvus.")
-    return doc, chunks, vectors
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    chunks = read_json(get_doc_dir(doc["doc_id"]) / CHUNKS)
+    if not chunks:
+        logger.error("no chunks found, cannot build index.")
+        raise ValueError("no chunks found, cannot build index.")
+    return doc, chunks
 
 
-@node_log("node_import_milvus")
-def node_import_milvus(state: ImportGraphState):
+@node_log("node_index")
+def node_index(state: ImportGraphState):
     """
-    节点功能：把切片与向量写入 Milvus，记录 chunk_count。
-    上游 node_bge_embedding，下游 node_enrich。
-    结束后清空状态里的切片与向量（体积大，后续节点不需要）。
+    节点功能：读取 chunks.json，编码成向量并写入 Milvus，记录 chunk_count。
+    上游 node_document_split，下游 node_enrich。
+    切片与向量都是大对象，只在本节点内传递，不进状态。
     """
-    doc, chunks, vectors = validate_and_get_data(state)
-    count = import_to_milvus(doc, chunks, vectors)
+    doc, chunks = validate_and_get_data(state)
+    count = import_to_milvus(doc, chunks, encode_chunks(doc, chunks))
     save_doc_fields(doc, {"chunk_count": count})
-    state["chunks"] = []
-    state["embeddings_content"] = []
     return state
 
 
 if __name__ == "__main__":
-    # 运行：uv run python -m processor.import_processor.nodes.node_import_milvus
-    # 不依赖任何服务：只用假文档、假向量构造 Milvus 行并打印，不写库
-    test_doc = {"doc_id": "demo", "version": 1, "content_type": "其他"}
-    test_chunks = [{"seq": 0, "kind": "text", "section_path": "第一节", "page_start": 1, "page_end": 1,
-                    "derived": False, "text": "示例正文"}]
-    test_rows = build_rows(test_doc, test_chunks, [{"dense": [0.0] * 4, "sparse": {}}])
-    logger.info(f"{test_rows[0]['chunk_id']} sparse={test_rows[0]['sparse']}")
+    # 运行：uv run python -m processor.import_processor.nodes.node_index <doc_id>
+    # 依赖 Mongo（读文档记录）、本地 BGE-M3、Milvus；会真的写入该文档当前版本的切片
+    import sys
+
+    from processor.import_processor.nodes.node_entry import load_document
+
+    result = node_index(create_default_state(doc=load_document(sys.argv[1])))
+    logger.info(f"chunk_count={result['doc']['chunk_count']}")
