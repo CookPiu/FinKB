@@ -14,7 +14,7 @@ SECTION_MAX_LEN = 1024
 
 # 检索时返回的字段（不含向量）
 OUTPUT_FIELDS = [
-    "chunk_id", "doc_id", "version", "kind", "content_type",
+    "chunk_id", "doc_id", "kind", "content_type",
     "section_path", "page_start", "page_end", "derived", "text",
 ]
 
@@ -39,10 +39,9 @@ def ensure_collection():
         return
 
     schema = client.create_schema(auto_id=False, enable_dynamic_field=False)
-    # chunk_id = {doc_id}-{version}-{seq:04d}，重跑时 upsert 覆盖同一条，保证幂等
+    # chunk_id = {doc_id}-{seq:04d}，重跑时 upsert 覆盖同一条，保证幂等
     schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=128)
     schema.add_field("doc_id", DataType.VARCHAR, max_length=64)
-    schema.add_field("version", DataType.INT32)
     schema.add_field("kind", DataType.VARCHAR, max_length=32)
     schema.add_field("content_type", DataType.VARCHAR, max_length=64)
     schema.add_field("section_path", DataType.VARCHAR, max_length=SECTION_MAX_LEN)
@@ -74,6 +73,13 @@ def upsert_rows(rows, batch_size=64):
 
 def delete_rows(filter_expr: str):
     get_milvus_client().delete(milvus_config.chunks_collection, filter=filter_expr)
+
+
+def list_chunk_ids(filter_expr: str) -> list:
+    """列出符合条件的切片主键，用于写入后删掉不再存在的旧切片"""
+    rows = get_milvus_client().query(milvus_config.chunks_collection, filter=filter_expr,
+                                     output_fields=["chunk_id"], limit=10000)
+    return [row["chunk_id"] for row in rows]
 
 
 def count_rows(filter_expr: str = "") -> int:

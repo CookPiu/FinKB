@@ -15,6 +15,7 @@ from utils.clients.milvus_utils import (
     count_rows,
     delete_rows,
     ensure_collection,
+    list_chunk_ids,
     quote_str,
     upsert_rows,
 )
@@ -34,8 +35,8 @@ def build_embed_text(doc: dict, chunk: dict) -> str:
 
 
 def build_chunk_id(doc: dict, seq: int) -> str:
-    """chunk_id = {doc_id}-{version}-{seq:04d}：同一版本重跑时覆盖同一条"""
-    return f"{doc['doc_id']}-{doc['version']}-{seq:04d}"
+    """chunk_id = {doc_id}-{seq:04d}：由内容与序号决定，重跑时 upsert 覆盖同一条"""
+    return f"{doc['doc_id']}-{seq:04d}"
 
 
 def fit_bytes(text: str, limit: int) -> str:
@@ -65,7 +66,6 @@ def build_rows(doc: dict, chunks: list, vectors: list) -> list:
             {
                 "chunk_id": build_chunk_id(doc, chunk["seq"]),
                 "doc_id": doc["doc_id"],
-                "version": doc["version"],
                 "kind": chunk["kind"],
                 "content_type": doc["content_type"],
                 "section_path": fit_bytes(chunk["section_path"], SECTION_MAX_LEN),
@@ -101,18 +101,24 @@ def encode_chunks(doc: dict, chunks: list) -> list:
 @step_log("import_to_milvus")
 def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     """
-    写入当前版本、删除其他版本并核对条数
+    先写入本次的全部切片，再删掉这次没写到的旧切片（重切后切片变少时会有多余的），最后核对条数
     :return: Milvus 中该文档的切片数
     """
     ensure_collection()
-    upsert_rows(build_rows(doc, chunks, vectors))
     quoted_id = quote_str(doc["doc_id"])
-    delete_rows(f"doc_id == {quoted_id} and version != {doc['version']}")
+    old_ids = list_chunk_ids(f"doc_id == {quoted_id}")
+    rows = build_rows(doc, chunks, vectors)
+    upsert_rows(rows)
+    new_ids = set(row["chunk_id"] for row in rows)
+    stale = [chunk_id for chunk_id in old_ids if chunk_id not in new_ids]
+    if stale:
+        delete_rows("chunk_id in [" + ", ".join(quote_str(c) for c in stale) + "]")
+        logger.info(f"删除 {len(stale)} 个不再存在的旧切片")
     count = count_rows(f"doc_id == {quoted_id}")
     if count != len(chunks):
         raise RuntimeError(f"写入后切片数不一致：Milvus {count}，chunks.json {len(chunks)}")
     drop_superseded(doc)
-    logger.info(f"index     {doc['file_name']}：写入 {count} 个切片（版本 {doc['version']}）")
+    logger.info(f"index     {doc['file_name']}：写入 {count} 个切片")
     return count
 
 

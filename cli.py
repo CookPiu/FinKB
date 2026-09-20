@@ -128,13 +128,13 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     from utils.clients.mongo_utils import get_db
 
-    fields = {"file_name": 1, "status": 1, "version": 1, "page_count": 1, "chunk_count": 1, "error": 1}
+    fields = {"file_name": 1, "status": 1, "page_count": 1, "chunk_count": 1, "error": 1}
     rows = list(get_db().documents.find({}, fields).sort("file_name", 1))
     counts = {}
     for row in rows:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
         print(
-            f"{row['_id']}  {row['status']:<10} v{row.get('version')} "
+            f"{row['_id']}  {row['status']:<10} "
             f"p={row.get('page_count')} c={row.get('chunk_count')}  {row['file_name']}"
         )
         if row.get("error"):

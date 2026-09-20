@@ -3,7 +3,7 @@ from utils.search_utils import build_filter, rrf_fuse
 
 def make_row(chunk_id, score):
     """构造一行 Milvus 检索结果"""
-    return {"chunk_id": chunk_id, "score": score, "doc_id": "d", "version": 1, "kind": "text", "content_type": "c",
+    return {"chunk_id": chunk_id, "score": score, "doc_id": "d", "kind": "text", "content_type": "c",
             "section_path": "", "page_start": 1, "page_end": 1, "derived": False, "text": "t"}
 
 

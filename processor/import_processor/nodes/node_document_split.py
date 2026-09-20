@@ -248,7 +248,7 @@ def node_document_split(state: ImportGraphState):
     doc = validate_and_get_data(state)
     chunk_count = split_document(doc["doc_id"])
     # 每次切分产出一套新切片，版本号 +1；入库节点按新版本写入后删除旧版本
-    save_doc_fields(doc, {"chunk_count": chunk_count, "version": doc["version"] + 1})
+    save_doc_fields(doc, {"chunk_count": chunk_count})
     return state
 
 

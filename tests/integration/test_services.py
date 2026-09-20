@@ -28,7 +28,7 @@ def test_minio_bucket():
 
 def test_index_matches_documents():
     """每个就绪文档在 Milvus 中的切片数等于 documents.chunk_count，且只有当前版本。"""
-    from utils.clients.milvus_utils import count_rows, quote_str
+    from utils.clients.milvus_utils import count_rows, list_chunk_ids, quote_str
     from utils.clients.mongo_utils import get_db
 
     ready = list(get_db().documents.find({"status": "ready"}))
@@ -36,7 +36,10 @@ def test_index_matches_documents():
     for d in ready:
         q = quote_str(d["_id"])
         assert count_rows(f"doc_id == {q}") == d["chunk_count"], d["file_name"]
-        assert count_rows(f"doc_id == {q} and version != {d['version']}") == 0, d["file_name"]
+        # chunk_id 由 doc_id 与序号决定，序号必须是 0..chunk_count-1 的连续区间
+        chunk_ids = sorted(list_chunk_ids(f"doc_id == {q}"))
+        expected = [f"{d['_id']}-{seq:04d}" for seq in range(d["chunk_count"])]
+        assert chunk_ids == expected, d["file_name"]
 
 
 def test_hybrid_search_returns_maotai_revenue_table():

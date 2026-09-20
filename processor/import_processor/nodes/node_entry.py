@@ -64,7 +64,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "source_path": source_path,
         "content_type": guess_content_type(rel_dir, path.name),
         "document_title": title_from_filename(path.stem),
-        "version": 0,
         "status": STATUS_RUNNING,
         "error": None,
         "page_count": None,
