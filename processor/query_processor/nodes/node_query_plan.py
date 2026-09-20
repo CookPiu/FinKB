@@ -1,7 +1,8 @@
 """
-节点：查询规划
+节点：查询改写
 读会话；上一轮在等澄清且本轮回复能匹配候选时，由代码直接确定对象（不调用 LLM）；
-否则一次 LLM 调用输出结构化的查询计划（JSON，代码补默认值并校验）。
+否则一次 LLM 调用把问题补全成独立问题，并抽出提到的对象与财务指标（JSON，代码补默认值并校验）。
+该不该回答、要不要拒答由 node_answer_output 里的模型判断，这里不做意图分类。
 """
 import json
 import re
@@ -12,23 +13,6 @@ from utils.clients.mongo_history_utils import get_history, load_session
 from utils.entity_utils import get_entity_map, pick_option
 from utils.lm.lm_utils import chat
 from utils.load_prompt import load_prompt
-
-INTENTS = [
-    "product_info",
-    "risk",
-    "knowledge",
-    "announcement",
-    "market_policy",
-    "process",
-    "investment_advice",
-    "realtime",
-    "out_of_scope",
-    "chitchat",
-]
-# wants_summary 可接受的"是 / 否"写法（与原 pydantic 布尔字段的宽松解析一致，不区分大小写）
-TRUE_TEXTS = ("1", "on", "t", "true", "y", "yes")
-FALSE_TEXTS = ("0", "off", "f", "false", "n", "no")
-
 
 @step_log("validate_and_get_data")
 def validate_and_get_data(state: QueryGraphState):
@@ -51,7 +35,7 @@ def node_query_plan(state: QueryGraphState):
     节点功能：理解问题，产出查询计划 plan。
     - 上一轮在等澄清且本轮回复能对上候选：沿用上一轮的计划，把选中对象写进问题，标记 clarified，不调用 LLM；
     - 否则读取最近几轮历史与焦点对象，调用 LLM 规划（输出无法解析时退回知识类检索）。
-    下游：node_entity_confirm。
+    下游：node_gather_evidence。
     """
     session_id, question = validate_and_get_data(state)
     session = load_session(session_id)
@@ -127,13 +111,11 @@ def build_plan_messages(question: str, history: list, focus_names: list) -> list
 
 
 def build_default_plan(standalone_query: str) -> dict:
-    """默认计划：知识类问题、无实体、无指标、不要摘要"""
+    """默认计划：问题原样、没有对象、没有指标"""
     return {
         "standalone_query": standalone_query,
-        "intent": "knowledge",
         "entity_mentions": [],
         "metrics": [],
-        "wants_summary": False,
     }
 
 
@@ -155,26 +137,12 @@ def parse_str_list(value, name: str) -> list:
     return value
 
 
-def parse_bool(value, name: str) -> bool:
-    """校验布尔字段：接受 true/false、0/1 与常见的是否字符串"""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)) and value in (0, 1):
-        return value == 1
-    if isinstance(value, str) and value.lower() in TRUE_TEXTS:
-        return True
-    if isinstance(value, str) and value.lower() in FALSE_TEXTS:
-        return False
-    raise ValueError(f"{name} 不是布尔值：{value}")
-
-
-@step_log("parse_plan")
 def parse_plan(text: str) -> dict:
     """
     把 LLM 输出解析成查询计划：缺省字段补默认值，取值不合法时报错
     :param text: 模型输出
     :return: 计划 dict（键见 state.py 模块说明）
-    :raise ValueError: 不是 JSON 对象、standalone_query 缺失或不是字符串、intent 不在取值范围、列表或布尔字段类型不对
+    :raise ValueError: 不是 JSON 对象、standalone_query 缺失或不是字符串、列表字段类型不对
     """
     data = json.loads(extract_json_text(text))
     if not isinstance(data, dict):
@@ -182,14 +150,9 @@ def parse_plan(text: str) -> dict:
     standalone_query = data.get("standalone_query")
     if not isinstance(standalone_query, str):
         raise ValueError(f"standalone_query 缺失或不是字符串：{standalone_query}")
-    intent = data.get("intent", "knowledge")
-    if intent not in INTENTS:
-        raise ValueError(f"intent 取值不合法：{intent}")
     plan = build_default_plan(standalone_query)
-    plan["intent"] = intent
     plan["entity_mentions"] = parse_str_list(data.get("entity_mentions", []), "entity_mentions")
     plan["metrics"] = parse_str_list(data.get("metrics", []), "metrics")
-    plan["wants_summary"] = parse_bool(data.get("wants_summary", False), "wants_summary")
     return plan
 
 
@@ -204,7 +167,7 @@ def plan_query(question: str, history: list, focus_names: list) -> dict:
         raw = chat(messages, json_mode=True)
         return parse_plan(raw)
     except ValueError as e:
-        logger.warning(f"规划结果无法解析，退回为知识类检索：{e}")
+        logger.warning(f"改写结果无法解析，直接用原问题检索：{e}")
         return build_default_plan(question)
 
 

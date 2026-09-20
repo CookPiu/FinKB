@@ -1,7 +1,7 @@
 """
 查询图的状态
-plan（查询计划，node_query_plan 产出）为 dict：standalone_query 补全指代后的独立问题、intent 意图、
-entity_mentions 问题里提到的实体、metrics 财务指标名、wants_summary 是否在问资料的主要内容。
+plan（查询计划，node_query_plan 产出）为 dict：standalone_query 补全指代后的独立问题、
+entity_mentions 问题里提到的对象、metrics 财务指标名。
 """
 import copy
 from typing import TypedDict
@@ -15,25 +15,24 @@ class QueryGraphState(TypedDict):
     # 会话（node_query_plan 读取）
     history: list  # 最近几轮 [{role, text}]
     focus_entity_ids: list  # 上一轮在谈的对象
-    clarified: bool  # 本轮是对澄清问题的回答，实体已由代码确定
+    clarified: bool  # 本轮是对澄清问题的回答，对象已由代码确定
 
-    # 规划与实体确认
+    # 规划
     plan: dict  # 查询计划，键见模块说明
-    entity_ids: list
-    candidate_ids: list  # 有歧义时的候选
-    doc_ids: list  # 实体对应的文档，用于检索过滤
 
-    # 取证（三个节点并行写入各自字段）
-    facts: list
-    summaries: list
-    embedding_chunks: list  # 语义检索命中 dict（见 utils/search_utils.py）
-    top_dense: float
-
-    # 精排与回答
+    # 取证（node_gather_evidence 写入）
+    entity_ids: list  # 已确认的对象
+    candidate_ids: list  # 有歧义时的候选对象 ID
+    candidate_names: list  # 候选对象名称，交给模型决定要不要澄清
+    unknown_mentions: list  # 问题提到但不在知识库里的对象
+    doc_ids: list  # 对象对应的文档，用于检索过滤
     evidence: list  # 证据 dict（见 utils/citation_utils.py）
+
+    # 回答（node_answer_output 写入）
     kind: str  # answer / refuse / clarify / decline_advice / realtime_notice / chitchat
     answer: str
     sources: list
+    notices: list  # 模型给出的提示语标记：risk / realtime
     guard_hits: list
 
 
@@ -46,15 +45,14 @@ query_graph_default_state: QueryGraphState = {
     "plan": {},
     "entity_ids": [],
     "candidate_ids": [],
+    "candidate_names": [],
+    "unknown_mentions": [],
     "doc_ids": [],
-    "facts": [],
-    "summaries": [],
-    "embedding_chunks": [],
-    "top_dense": 0.0,
     "evidence": [],
     "kind": "",
     "answer": "",
     "sources": [],
+    "notices": [],
     "guard_hits": [],
 }
 
