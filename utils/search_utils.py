@@ -1,16 +1,11 @@
 """
-语义检索：稠密、稀疏分别检索，在代码中做 RRF 融合并保留两路原始分
-不用 Milvus 内置 hybrid_search：内置融合只返回融合分，拿不到稠密余弦原始分，
-评测要看稠密分分布，逐路分析召回效果也需要两路的原始名次。
-命中 hit 为 dict：chunk_id, doc_id, kind, content_type, section_path, page_start, page_end, derived, text,
-score_dense, score_sparse, rank_dense, rank_sparse, score_rrf,
+语义检索：稠密 + 稀疏混合检索（Milvus 内置 hybrid_search，服务端 RRF 融合），再补上来源元数据。
+命中 hit 为 dict：chunk_id, doc_id, kind, content_type, section_path, page_start, page_end, derived, text, score，
 以及来源元数据 file_name, document_title, source_path（来自 documents，全程随证据携带）。
 """
-from utils.clients.milvus_utils import quote_str, search_dense, search_sparse
+from utils.clients.milvus_utils import hybrid_search, quote_str
 from utils.clients.mongo_utils import get_db
 from utils.lm.embedding_utils import generate_query_embedding
-
-RRF_K = 60
 
 # 文档元数据缓存：doc_id → documents 里的 file_name / document_title / source_path
 _doc_cache = {}
@@ -37,7 +32,7 @@ def build_filter(kinds=None, content_types=None, doc_ids=None) -> str:
 
 
 def new_hit(row: dict) -> dict:
-    """由 Milvus 返回的一行建立命中记录；分数、名次与来源元数据随后填写"""
+    """由 Milvus 返回的一行建立命中记录；来源元数据随后填写"""
     return {
         "chunk_id": row["chunk_id"],
         "doc_id": row["doc_id"],
@@ -48,45 +43,11 @@ def new_hit(row: dict) -> dict:
         "page_end": row["page_end"],
         "derived": row["derived"],
         "text": row["text"],
-        "score_dense": None,
-        "score_sparse": None,
-        "rank_dense": None,
-        "rank_sparse": None,
-        "score_rrf": 0.0,
+        "score": round(float(row["score"]), 5),
         "file_name": "",
         "document_title": "",
         "source_path": "",
     }
-
-
-def get_or_add_hit(hits: dict, row: dict) -> dict:
-    """同一切片在两路都出现时只保留一条命中记录"""
-    chunk_id = row["chunk_id"]
-    if chunk_id not in hits:
-        hits[chunk_id] = new_hit(row)
-    return hits[chunk_id]
-
-
-def rrf_fuse(dense: list, sparse: list, k: int = RRF_K) -> list:
-    """
-    倒数名次融合：每一路贡献 1 / (k + 名次)，两路都召回的切片分数累加
-    :param dense: search_dense 的结果（按相似度降序）
-    :param sparse: search_sparse 的结果（按内积降序）
-    :param k: RRF 平滑常数
-    :return: 去重后的命中列表，按融合分降序；两路原始分保留 4 位小数，未召回的一路为 None
-    """
-    hits = {}
-    for rank, row in enumerate(dense, 1):
-        hit = get_or_add_hit(hits, row)
-        hit["score_dense"] = round(float(row["score"]), 4)
-        hit["rank_dense"] = rank
-        hit["score_rrf"] += 1.0 / (k + rank)
-    for rank, row in enumerate(sparse, 1):
-        hit = get_or_add_hit(hits, row)
-        hit["score_sparse"] = round(float(row["score"]), 4)
-        hit["rank_sparse"] = rank
-        hit["score_rrf"] += 1.0 / (k + rank)
-    return sorted(hits.values(), key=lambda h: h["score_rrf"], reverse=True)
 
 
 def get_doc_meta(doc_ids: set) -> dict:
@@ -106,9 +67,9 @@ def get_doc_meta(doc_ids: set) -> dict:
     return result
 
 
-def attach_doc_meta(hits: list, top_k: int) -> list:
+def attach_doc_meta(hits: list) -> list:
     """
-    给命中补上来源元数据并取前 top_k 条
+    给命中补上来源元数据
     文档记录已被删除的切片直接丢掉（正常情况下切片会与记录一起删除）
     """
     meta = get_doc_meta({hit["doc_id"] for hit in hits})
@@ -121,15 +82,13 @@ def attach_doc_meta(hits: list, top_k: int) -> list:
         hit["document_title"] = doc.get("document_title", "")
         hit["source_path"] = doc.get("source_path", "")
         results.append(hit)
-        if len(results) >= top_k:
-            break
     return results
 
 
 def semantic_search(query: str, top_k: int = 5, candidates: int = 30, kinds=None, content_types=None,
                     doc_ids=None) -> list:
     """
-    稠密 + 稀疏检索并融合
+    稠密 + 稀疏混合检索
     :param query: 问题
     :param top_k: 最多返回几条
     :param candidates: 每一路先取多少条候选
@@ -138,7 +97,13 @@ def semantic_search(query: str, top_k: int = 5, candidates: int = 30, kinds=None
     """
     embedding = generate_query_embedding(query)
     expr = build_filter(kinds, content_types, doc_ids)
-    dense = search_dense(embedding["dense"], candidates, expr)
-    sparse = search_sparse(embedding["sparse"], candidates, expr)
-    fused = rrf_fuse(dense, sparse)
-    return attach_doc_meta(fused, top_k)
+    rows = hybrid_search(embedding["dense"], embedding["sparse"], candidates, top_k, expr)
+    return attach_doc_meta([new_hit(row) for row in rows])
+
+
+if __name__ == "__main__":
+    # 运行：uv run python -m utils.search_utils
+    # 依赖：Milvus、本地 BGE-M3（CPU 首次加载约 20 秒）
+    for test_hit in semantic_search("贵州茅台2026年第一季度营业收入是多少", top_k=5):
+        print(f"{test_hit['score']:.5f} {test_hit['file_name']} p{test_hit['page_start']} "
+              f"{test_hit['text'][:50]}")

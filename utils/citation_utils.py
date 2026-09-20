@@ -1,7 +1,7 @@
 """
 证据与引用：证据在提示词里的写法、引用编号校正、来源列表渲染
 证据 evidence 为 dict：eid, kind(fact / summary / chunk), text, doc_id, file_name, document_title, content_type,
-page_start, page_end, source_path, entity_name, entity_codes, score_dense, derived。
+page_start, page_end, source_path, entity_name, entity_codes, derived。
 模型只写编号 [E1]，引用由代码根据证据携带的来源元数据渲染：保留正文中真实存在的编号，删除模型编造的编号，
 按首次出现顺序生成来源列表。
 """

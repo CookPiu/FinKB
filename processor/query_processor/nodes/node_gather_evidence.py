@@ -100,7 +100,6 @@ def gather_evidence(standalone_query: str, entity_ids: list, doc_ids: list, metr
         item = build_evidence("chunk", hit["text"], doc_meta[hit["doc_id"]], entity_of_doc.get(hit["doc_id"]))
         item["page_start"] = hit["page_start"]
         item["page_end"] = hit["page_end"]
-        item["score_dense"] = hit["score_dense"]
         item["derived"] = hit["derived"]
         evidence.append(item)
 
@@ -177,7 +176,6 @@ def build_evidence(kind: str, text: str, doc: dict, entity) -> dict:
         "source_path": doc.get("source_path", ""),
         "entity_name": entity_name,
         "entity_codes": entity_codes,
-        "score_dense": None,
         "derived": False,
     }
 

@@ -1,14 +1,15 @@
 """
-Milvus 集合 fin_chunks：建表、写入、删除，以及稠密 / 稀疏分别检索。
+Milvus 集合 fin_chunks：建表、写入、删除、混合检索。
 文本、表格、摘要、图片描述都在同一集合，用 kind 区分。
-稠密与稀疏分开检索、在代码里做 RRF 融合（见 utils/search_utils.py），不用内置 hybrid_search：
-内置融合只返回融合分，拿不到稠密余弦原始分，评测要看稠密分分布、逐路分析要看两路名次。
+检索走 Milvus 内置 hybrid_search：稠密与稀疏各取一批候选，服务端用 RRFRanker(k=60) 按名次融合。
+RRF 只看名次不看分值，天然规避两路分数不可比的问题。
 """
-from pymilvus import DataType, MilvusClient
+from pymilvus import AnnSearchRequest, DataType, MilvusClient, RRFRanker
 
 from common.config.milvus_config import milvus_config
 
 DENSE_DIM = 1024  # BGE-M3 稠密向量维度
+RRF_K = 60  # RRF 融合常数：score = Σ 1 / (k + 该路名次)
 TEXT_MAX_LEN = 65535  # VARCHAR 上限（按 UTF-8 字节计）
 SECTION_MAX_LEN = 1024
 
@@ -100,38 +101,36 @@ def _hits_to_rows(hits):
     return rows
 
 
-def search_dense(vector, limit: int, filter_expr: str = ""):
+def hybrid_search(dense_vector, sparse_vector, candidates: int, limit: int, filter_expr: str = ""):
     """
-    稠密向量检索（余弦相似度）
-    :return: [{"score", "chunk_id", "doc_id", ...OUTPUT_FIELDS}]，按相似度降序
+    稠密 + 稀疏混合检索，服务端按 RRF 融合
+    :param dense_vector: 稠密向量
+    :param sparse_vector: 稀疏向量 {维度: 权重}
+    :param candidates: 每一路先取多少条候选
+    :param limit: 融合后返回多少条
+    :return: [{"score", "chunk_id", "doc_id", ...OUTPUT_FIELDS}]，按融合分降序；score 是 RRF 分
     """
-    result = get_milvus_client().search(
-        milvus_config.chunks_collection,
-        data=[vector],
+    dense_req = AnnSearchRequest(
+        data=[dense_vector],
         anns_field="dense",
-        limit=limit,
-        filter=filter_expr,
-        output_fields=OUTPUT_FIELDS,
         # HNSW 的 ef 必须不小于 limit，取 2 倍留余量
-        search_params={"metric_type": "COSINE", "params": {"ef": max(64, limit * 2)}},
+        param={"metric_type": "COSINE", "params": {"ef": max(64, candidates * 2)}},
+        limit=candidates,
+        expr=filter_expr,
     )
-    return _hits_to_rows(result[0])
-
-
-def search_sparse(vector, limit: int, filter_expr: str = ""):
-    """
-    稀疏向量检索（内积）
-    :param vector: {维度: 权重}
-    :return: 同 search_dense
-    """
-    result = get_milvus_client().search(
-        milvus_config.chunks_collection,
-        data=[vector],
+    sparse_req = AnnSearchRequest(
+        data=[sparse_vector],
         anns_field="sparse",
+        param={"metric_type": "IP", "params": {"drop_ratio_search": 0.0}},
+        limit=candidates,
+        expr=filter_expr,
+    )
+    result = get_milvus_client().hybrid_search(
+        milvus_config.chunks_collection,
+        reqs=[dense_req, sparse_req],
+        ranker=RRFRanker(k=RRF_K),
         limit=limit,
-        filter=filter_expr,
         output_fields=OUTPUT_FIELDS,
-        search_params={"metric_type": "IP", "params": {"drop_ratio_search": 0.0}},
     )
     return _hits_to_rows(result[0])
 

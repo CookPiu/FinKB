@@ -43,7 +43,7 @@ def test_stream_guard_replaces_whole_sentence_and_keeps_others():
 def _ev(eid, title="华夏债券基金产品资料概要", page=3):
     return {"eid": eid, "kind": "chunk", "text": "t", "doc_id": "d", "file_name": f"{title}.pdf",
             "document_title": title, "content_type": "基金产品资料概要", "page_start": page, "page_end": page,
-            "source_path": "", "entity_name": "华夏债券C", "entity_codes": ["001003"], "score_dense": None,
+            "source_path": "", "entity_name": "华夏债券C", "entity_codes": ["001003"],
             "derived": False}
 
 

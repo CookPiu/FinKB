@@ -58,9 +58,7 @@ def build_top_record(hit: dict, golds: list) -> dict:
         "chunk_id": hit["chunk_id"],
         "kind": hit["kind"],
         "pages": f"{hit['page_start']}-{hit['page_end']}",
-        "dense": hit["score_dense"],
-        "sparse": hit["score_sparse"],
-        "rrf": round(hit["score_rrf"], 5),
+        "score": hit["score"],
         "hit": hit_flag,
     }
 
@@ -88,7 +86,6 @@ def run_retrieval(items: list) -> list:
             start_ts = time.perf_counter()
             hits = semantic_search(query, top_k=TOP_K, candidates=CANDIDATES)
             latency_ms = (time.perf_counter() - start_ts) * 1000
-            dense_scores = [h["score_dense"] for h in hits if h["score_dense"] is not None]
             golds = turn["gold"]
             records.append(
                 {
@@ -100,7 +97,7 @@ def run_retrieval(items: list) -> list:
                     "has_gold": bool(golds),
                     "rank": first_hit_rank(hits, golds) if golds else None,
                     "file_rank": file_hit_rank(hits, golds) if golds else None,
-                    "top_dense": max(dense_scores) if dense_scores else None,
+                    "top_score": hits[0]["score"] if hits else None,
                     "latency_ms": round(latency_ms, 1),
                     "top": [build_top_record(h, golds) for h in hits[:5]],
                 }
@@ -280,21 +277,10 @@ def summarize_records(records: list) -> dict:
         by_category[key] = summarize(ranks_by_category[key])
         file_level_by_category[key] = summarize(file_ranks_by_category[key])
     all_ranks = [r["rank"] for r in records if r["has_gold"]]
-    answerable = []
-    unanswerable = []
-    for record in records:
-        if record["top_dense"] is None:
-            continue
-        if record["has_gold"]:
-            answerable.append(record["top_dense"])
-        if record["expect"] in ("refuse", "realtime_notice"):
-            unanswerable.append(record["top_dense"])
     return {
         "by_category": by_category,
         "file_level_by_category": file_level_by_category,
         "overall": summarize(all_ranks),
-        "top_dense_answerable": describe(answerable),
-        "top_dense_unanswerable": describe(unanswerable),
         "latency_ms": describe([r["latency_ms"] for r in records]),
     }
 
@@ -309,9 +295,7 @@ def print_summary(summary: dict):
             f"{key:<22} {s['n']:>3}  {s['hit@1']:.3f}  {s['hit@3']:.3f}  {s['hit@5']:.3f}  {s['hit@10']:.3f}   "
             f"{s['mrr@10']:.3f}   {f5}"
         )
-    print(f"\n稠密最高分  可回答：{summary['top_dense_answerable']}")
-    print(f"稠密最高分  不可回答：{summary['top_dense_unanswerable']}")
-    print(f"检索延迟 ms：{summary['latency_ms']}")
+    print(f"\n检索延迟 ms：{summary['latency_ms']}")
 
 
 def build_meta(args: argparse.Namespace, path: Path, n_items: int) -> dict:

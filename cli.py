@@ -149,7 +149,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     hits = semantic_search(args.query, top_k=args.k, kinds=args.kind, content_types=args.content_type)
     for i, hit in enumerate(hits, 1):
         print(
-            f"\n#{i} rrf={hit['score_rrf']:.4f} dense={hit['score_dense']} sparse={hit['score_sparse']} "
+            f"\n#{i} score={hit['score']:.5f} "
             f"[{hit['kind']}] {hit['file_name']} p{hit['page_start']}-{hit['page_end']}"
         )
         print(f"   § {hit['section_path']}")
