@@ -15,7 +15,7 @@ from utils.search_utils import semantic_search
 
 CANDIDATES = 30  # 稠密、稀疏各取多少条候选
 TOP_K = 20  # 融合后保留多少条进入精排
-TOP_CHUNKS = 6  # 精排后取多少条切片作为证据
+TOP_CHUNKS = 8  # 精排后取多少条切片作为证据
 
 
 @step_log("validate_and_get_data")
