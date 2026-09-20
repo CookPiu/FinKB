@@ -6,7 +6,7 @@
 - 其余：记下实体对应的文档，交给取证节点。
 """
 from common.answer_templates import CHITCHAT, DECLINE_ADVICE, OUT_OF_SCOPE, REALTIME, REFUSE, clarify
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.clients.mongo_utils import get_documents_by_file
 from utils.entity_utils import get_entities, get_entity_map, resolve_mentions
@@ -25,6 +25,20 @@ DIRECT_TEXTS = {
 }
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验实体确认所需的入参
+    :return: 查询计划
+    :raise ValueError: 计划缺失或缺少必要字段（node_query_plan 未执行）
+    """
+    plan = state.get("plan") or {}
+    if not plan.get("standalone_query") or not plan.get("intent"):
+        logger.error("no valid plan found in state")
+        raise ValueError("no valid plan found in state")
+    return plan
+
+
 @node_log("node_entity_confirm")
 def node_entity_confirm(state: QueryGraphState):
     """
@@ -33,7 +47,7 @@ def node_entity_confirm(state: QueryGraphState):
     - 否则解析计划里的实体提及，按意图与解析结果选择路由；非检索路由写入 kind / answer。
     下游：main_graph.route_after_entity_confirm（answer 非空 → node_answer_output，否则并行取证）。
     """
-    plan = state["plan"]
+    plan = validate_and_get_data(state)
     route = "retrieve"
     candidates = []
     if state.get("clarified"):
@@ -55,6 +69,7 @@ def node_entity_confirm(state: QueryGraphState):
     return state
 
 
+@step_log("get_resolved_ids")
 def get_resolved_ids(resolution: dict, focus_entity_ids, intent: str) -> list:
     """已确认的实体 ID；问题没提到任何实体时，符合条件的追问沿用上一轮的焦点对象"""
     entity_ids = [entity["id"] for entity in resolution["entities"]]
@@ -64,6 +79,7 @@ def get_resolved_ids(resolution: dict, focus_entity_ids, intent: str) -> list:
     return entity_ids
 
 
+@step_log("choose_route")
 def choose_route(intent: str, status: str) -> str:
     """
     按意图与实体解析状态选择路由
@@ -85,6 +101,7 @@ def choose_route(intent: str, status: str) -> str:
     return "retrieve"
 
 
+@step_log("get_doc_ids")
 def get_doc_ids(entity_ids: list) -> list:
     """实体对应的文档 ID（按实体表里的文件名到 documents 查找，未导入的文件跳过）"""
     docs = get_documents_by_file()

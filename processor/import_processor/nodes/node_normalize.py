@@ -419,13 +419,32 @@ def describe_images(blocks: list, base, cache_path):
 
 # ---------- 节点 ----------
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验规范化所需的入参
+    :return: 文档记录
+    :raise ValueError: 状态里没有文档记录，或解析产物不存在
+    """
+    doc = state.get("doc")
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    content_list_path = get_doc_dir(doc["doc_id"]) / CONTENT_LIST
+    if not content_list_path.is_file():
+        logger.error(f"content_list.json not found: {content_list_path}")
+        raise ValueError(f"content_list.json not found: {content_list_path}")
+    return doc
+
+
 @node_log("node_normalize")
 def node_normalize(state: ImportGraphState):
     """
     节点功能：把解析结果 content_list.json 规范化为版面块 blocks.json。
     上游 node_parse 产出 content_list.json；下游 node_document_split 读取 blocks.json 切片。
     """
-    normalize_document(state["doc"]["doc_id"])
+    doc = validate_and_get_data(state)
+    normalize_document(doc["doc_id"])
     return state
 
 

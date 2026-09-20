@@ -7,7 +7,7 @@ MinerU 偶发 "parsing failed, please try again later"，失败后重提交。
 import time
 from pathlib import Path
 
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.artifact_utils import CONTENT_LIST, get_doc_dir, read_json, write_json
 from utils.clients.mineru_utils import SUPPORTED_EXTS, MinerUError, download_and_extract, poll_batch, submit_batch
@@ -25,6 +25,7 @@ def get_page_count(content_list: list) -> int:
     return max([block.get("page_idx", 0) for block in content_list]) + 1
 
 
+@step_log("parse_with_mineru")
 def parse_with_mineru(doc: dict) -> list:
     """提交 MinerU 并等待结果（含失败重提交），返回 content_list。"""
     doc_id = doc["doc_id"]
@@ -49,6 +50,7 @@ def parse_with_mineru(doc: dict) -> list:
     raise MinerUError(error)
 
 
+@step_log("parse_document")
 def parse_document(doc: dict, reparse: bool) -> int:
     """
     解析原件并落盘 content_list.json（已有缓存且不要求重解析时直接复用）
@@ -72,14 +74,28 @@ def parse_document(doc: dict, reparse: bool) -> int:
     return get_page_count(content)
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验解析所需的入参
+    :return: 元组 (文档记录, 是否忽略解析缓存)
+    :raise ValueError: 状态里没有文档记录（node_entry 未执行）
+    """
+    doc = state.get("doc")
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    return doc, state.get("reparse", False)
+
+
 @node_log("node_parse")
 def node_parse(state: ImportGraphState):
     """
     节点功能：把原件解析成 content_list.json，记录页数。
     上游 node_entry，下游 node_normalize；解析结果按文件哈希缓存，内容没变时不会重复调用 MinerU。
     """
-    doc = state["doc"]
-    page_count = parse_document(doc, state.get("reparse"))
+    doc, reparse = validate_and_get_data(state)
+    page_count = parse_document(doc, reparse)
     save_doc_fields(doc, {"page_count": page_count})
     return state
 

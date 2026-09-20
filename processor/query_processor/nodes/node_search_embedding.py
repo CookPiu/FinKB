@@ -2,12 +2,27 @@
 节点：语义检索
 稠密、稀疏分别检索并在代码中做 RRF 融合（utils/search_utils.py）；有实体时按文档过滤。
 """
-from common.logging.logger import node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.search_utils import semantic_search
 
 CANDIDATES = 30
 TOP_K = 20
+
+
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验检索所需的入参
+    :return: 元组 (补全后的独立问题, 文档过滤范围)；没有确认实体时过滤范围为 None（全库检索）
+    :raise ValueError: 计划里没有独立问题
+    """
+    plan = state.get("plan") or {}
+    standalone_query = plan.get("standalone_query", "")
+    if not standalone_query:
+        logger.error("no standalone_query found in plan")
+        raise ValueError("no standalone_query found in plan")
+    return standalone_query, state.get("doc_ids") or None
 
 
 @node_log("node_search_embedding")
@@ -18,8 +33,8 @@ def node_search_embedding(state: QueryGraphState):
     已确认实体时只在其文档内检索（doc_ids），否则全库检索。
     下游：node_rerank（精排、充分性判断用到稠密最高分 top_dense）。
     """
-    doc_ids = state.get("doc_ids") or None
-    hits = semantic_search(state["plan"]["standalone_query"], top_k=TOP_K, candidates=CANDIDATES, doc_ids=doc_ids)
+    standalone_query, doc_ids = validate_and_get_data(state)
+    hits = semantic_search(standalone_query, top_k=TOP_K, candidates=CANDIDATES, doc_ids=doc_ids)
     # 并行节点只返回自己写的键：整状态返回会与同一超步的其他节点冲突（InvalidUpdateError）
     return {"embedding_chunks": hits, "top_dense": get_top_dense(hits)}
 

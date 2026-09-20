@@ -4,7 +4,7 @@
 """
 import re
 
-from common.logging.logger import node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.clients.mongo_utils import get_db
 from utils.entity_utils import get_entity_map
@@ -14,6 +14,20 @@ MAX_FACT_GROUPS = 8
 ITEM_NOISE = re.compile(r"[\s()（）%％]")
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验事实查找所需的入参
+    :return: 元组 (已确认实体 ID, 计划里的财务指标)
+    :raise ValueError: 计划缺失（正常路由下本节点只在计划有 metrics 时触发）
+    """
+    plan = state.get("plan") or {}
+    if not plan:
+        logger.error("no plan found in state")
+        raise ValueError("no plan found in state")
+    return state.get("entity_ids", []), plan.get("metrics", [])
+
+
 @node_log("node_fact_lookup")
 def node_fact_lookup(state: QueryGraphState):
     """
@@ -21,8 +35,8 @@ def node_fact_lookup(state: QueryGraphState):
     计划有 metrics 且涉及上市公司时由路由触发，与 node_search_embedding / node_summary_fetch 并行。
     下游：node_rerank（事实排在证据最前面）。
     """
-    company_ids = get_company_ids(state.get("entity_ids", []))
-    facts = fact_lookup(company_ids, state["plan"]["metrics"])
+    entity_ids, metrics = validate_and_get_data(state)
+    facts = fact_lookup(get_company_ids(entity_ids), metrics)
     # 并行节点只返回自己写的键：整状态返回会与同一超步的其他节点冲突（InvalidUpdateError）
     return {"facts": facts}
 
@@ -97,6 +111,7 @@ def build_fact(group: dict) -> dict:
     }
 
 
+@step_log("fact_lookup")
 def fact_lookup(entity_ids: list, metrics: list) -> list:
     """
     查找财务事实

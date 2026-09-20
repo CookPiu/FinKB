@@ -3,7 +3,7 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.artifact_utils import get_doc_dir
 from utils.classify_utils import CONTENT_TYPE_OTHER, guess_content_type, title_from_filename
@@ -84,6 +84,7 @@ def to_mongo(doc: dict) -> dict:
     return record
 
 
+@step_log("build_new_document")
 def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
     """为首次导入的文件建立文档记录：原件上传 MinIO，查出将被替换的同名旧文档"""
     doc_id = build_doc_id(file_hash)
@@ -129,6 +130,7 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
     }
 
 
+@step_log("register_document")
 def register_document(path: Path, root: Path, force: bool = False):
     """
     登记文件，判定本次要做的动作
@@ -163,6 +165,22 @@ def register_document(path: Path, root: Path, force: bool = False):
     return doc, ACTION_NEW
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验登记所需的入参
+    :return: 元组 (文件路径, 导入根目录, 是否强制重建)；root_dir 为空时取文件所在目录
+    :raise ValueError: 没有传入文件路径
+    """
+    local_file_path = state.get("local_file_path")
+    if not local_file_path:
+        logger.error("no local_file_path found in state")
+        raise ValueError("no local_file_path found in state")
+    path = Path(local_file_path)
+    root = Path(state.get("root_dir") or path.parent)
+    return path, root, state.get("force", False)
+
+
 @node_log("node_entry")
 def node_entry(state: ImportGraphState):
     """
@@ -170,9 +188,8 @@ def node_entry(state: ImportGraphState):
     同哈希且已就绪 → skip（路由直接结束）；上次失败或指定 --force → redo（整条流水线重做）；
     新文件 → new（上传原件、写入 documents 记录）。
     """
-    path = Path(state["local_file_path"])
-    root = Path(state.get("root_dir") or path.parent)
-    doc, action = register_document(path, root, state.get("force", False))
+    path, root, force = validate_and_get_data(state)
+    doc, action = register_document(path, root, force)
     if action != ACTION_SKIP:
         logger.info(f"register  {doc['file_name']}（{action}）")
     state["doc"] = doc

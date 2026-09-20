@@ -3,7 +3,7 @@
 写入顺序：先 upsert 当前版本（chunk_id 确定性生成，重跑幂等），再删除该文档其他版本和被替换文档的切片，
 避免“先删后插”中途失败导致文档短暂或永久缺失。
 """
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState
 from utils.clients.milvus_utils import (
     SECTION_MAX_LEN,
@@ -67,6 +67,7 @@ def build_rows(doc: dict, chunks: list, vectors: list) -> list:
     return rows
 
 
+@step_log("retire_superseded")
 def retire_superseded(doc: dict):
     """删除被本文档替换的旧文档切片，并把旧文档标记为 superseded"""
     for old_id in doc["supersedes"]:
@@ -77,6 +78,7 @@ def retire_superseded(doc: dict):
         logger.info(f"旧文档 {old_id} 已被 {doc['file_name']} 替换")
 
 
+@step_log("import_to_milvus")
 def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     """
     写入当前版本、删除其他版本并核对条数
@@ -94,6 +96,22 @@ def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
     return count
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验入库所需的入参
+    :return: 元组 (文档记录, 切片列表, 向量列表)
+    :raise ValueError: 文档记录、切片或向量缺失（上游节点未执行）
+    """
+    doc = state.get("doc")
+    chunks = state.get("chunks") or []
+    vectors = state.get("embeddings_content") or []
+    if not doc or not chunks or not vectors:
+        logger.error("doc, chunks or embeddings_content is empty, cannot import to milvus.")
+        raise ValueError("doc, chunks or embeddings_content is empty, cannot import to milvus.")
+    return doc, chunks, vectors
+
+
 @node_log("node_import_milvus")
 def node_import_milvus(state: ImportGraphState):
     """
@@ -101,9 +119,7 @@ def node_import_milvus(state: ImportGraphState):
     上游 node_bge_embedding，下游 node_enrich。
     结束后清空状态里的切片与向量（体积大，后续节点不需要）。
     """
-    doc = state["doc"]
-    chunks = state.get("chunks") or []
-    vectors = state.get("embeddings_content") or []
+    doc, chunks, vectors = validate_and_get_data(state)
     count = import_to_milvus(doc, chunks, vectors)
     save_doc_fields(doc, {"chunk_count": count})
     state["chunks"] = []

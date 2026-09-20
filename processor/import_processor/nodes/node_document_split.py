@@ -11,7 +11,7 @@
 """
 import re
 
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.nodes.node_normalize import get_last_page, read_blocks
 from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, write_json
@@ -221,19 +221,38 @@ def build_chunks(blocks: list, target: int, max_chars: int, min_chars: int, tabl
     return chunks
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验切分所需的入参
+    :return: 文档记录
+    :raise ValueError: 状态里没有文档记录，或规范化产物不存在
+    """
+    doc = state.get("doc")
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    blocks_path = get_doc_dir(doc["doc_id"]) / BLOCKS
+    if not blocks_path.is_file():
+        logger.error(f"blocks.json not found: {blocks_path}")
+        raise ValueError(f"blocks.json not found: {blocks_path}")
+    return doc
+
+
 @node_log("node_document_split")
 def node_document_split(state: ImportGraphState):
     """
     节点功能：把版面块 blocks.json 切成检索切片 chunks.json，并把文档版本号 +1。
     上游 node_normalize；下游 node_bge_embedding 读取 chunks.json 计算向量。
     """
-    doc = state["doc"]
+    doc = validate_and_get_data(state)
     chunk_count = split_document(doc["doc_id"])
     # 每次切分产出一套新切片，版本号 +1；入库节点按新版本写入后删除旧版本
     save_doc_fields(doc, {"chunk_count": chunk_count, "version": doc["version"] + 1})
     return state
 
 
+@step_log("split_document")
 def split_document(doc_id: str) -> int:
     """切分一个文档：读 blocks.json，写 chunks.json，返回切片数"""
     doc_dir = get_doc_dir(doc_id)

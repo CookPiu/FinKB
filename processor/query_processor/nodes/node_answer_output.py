@@ -7,7 +7,7 @@
 import re
 
 from common.answer_templates import CHITCHAT, REALTIME_NOTICE, REFUSE, RISK_NOTICE
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.citation_utils import build_prompt_block, build_source, finalize_citations, render_sources
 from utils.clients.mongo_history_utils import delete_sessions, save_turn
@@ -25,6 +25,26 @@ NOTICE_KINDS = ("answer", "decline_advice")
 RISK_INTENTS = ("product_info", "risk", "investment_advice")
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验输出所需的入参
+    :return: 元组 (用户原问题, 查询计划, 证据列表)
+    :raise ValueError: 问题为空，或既没有现成话术也没有证据
+    """
+    question = state.get("original_query", "")
+    plan = state.get("plan") or {}
+    evidence = state.get("evidence") or []
+    if not question:
+        logger.error("no original_query found in state")
+        raise ValueError("no original_query found in state")
+    # 两条进入路径：上游写好了固定话术，或 node_rerank 给出了证据
+    if not state.get("answer") and not evidence:
+        logger.error("no answer and no evidence found in state, cannot perform answer output.")
+        raise ValueError("no answer and no evidence found in state, cannot perform answer output.")
+    return question, plan, evidence
+
+
 @node_log("node_answer_output")
 def node_answer_output(state: QueryGraphState):
     """
@@ -32,9 +52,7 @@ def node_answer_output(state: QueryGraphState):
     有两条进入路径：上游已写入固定话术（node_entity_confirm / node_rerank）时直接推送；
     否则（node_rerank 给出了证据）流式生成。随后校正引用、追加提示、推送来源，保存本轮问答，最后推送 final 事件。
     """
-    question = state["original_query"]
-    plan = state.get("plan") or {}
-    evidence = state.get("evidence") or []
+    question, plan, evidence = validate_and_get_data(state)
     guard_hits = []
     if state.get("answer"):
         # 固定话术
@@ -106,6 +124,7 @@ def apply_guard(raw: str, question: str) -> str:
     return guard.feed(raw) + guard.flush()
 
 
+@step_log("generate_answer")
 def generate_answer(question: str, standalone_query: str, evidence: list):
     """
     按证据流式生成回答并推送
@@ -129,6 +148,7 @@ def generate_answer(question: str, standalone_query: str, evidence: list):
     return "answer", answer, guard.hits
 
 
+@step_log("build_notices")
 def build_notices(kind: str, question: str, plan: dict, entity_ids: list) -> list:
     """
     回答末尾的附加提示
@@ -154,6 +174,7 @@ def has_product_entity(entity_ids: list) -> bool:
     return False
 
 
+@step_log("save_session_turn")
 def save_session_turn(state: QueryGraphState, kind: str, answer: str, plan: dict, sources: list):
     """
     保存本轮问答与会话状态

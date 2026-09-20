@@ -4,7 +4,7 @@
 """
 import time
 
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.artifact_utils import CHUNKS, get_doc_dir, read_json
 from utils.lm.embedding_utils import generate_embeddings
@@ -20,13 +20,27 @@ def build_embed_text(doc: dict, chunk: dict) -> str:
     return f"{head}\n{chunk['embed_body']}"
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验向量化所需的入参
+    :return: 文档记录
+    :raise ValueError: 状态里没有文档记录
+    """
+    doc = state.get("doc")
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    return doc
+
+
 @node_log("node_bge_embedding")
 def node_bge_embedding(state: ImportGraphState):
     """
     节点功能：读取 chunks.json，批量编码成稠密 + 稀疏向量。
     上游 node_document_split，下游 node_import_milvus。
     """
-    doc = state["doc"]
+    doc = validate_and_get_data(state)
     chunks = read_json(get_doc_dir(doc["doc_id"]) / CHUNKS)
     if not chunks:
         raise ValueError("没有可索引的切片")

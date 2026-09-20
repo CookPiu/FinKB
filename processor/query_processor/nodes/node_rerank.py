@@ -6,7 +6,7 @@
   无实体的全库检索还要求稠密最高分 ≥ TAU。不充分时直接写入固定拒答话术。
 """
 from common.answer_templates import REFUSE
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.clients.mongo_utils import get_documents_by_file
 from utils.entity_utils import get_entity_map
@@ -14,6 +14,23 @@ from utils.lm.reranker_utils import rerank
 
 TAU = 0.58  # 无实体过滤时，稠密最高分低于此值判为证据不足（由 M1 基线的正负例分布定出）
 TOP_CHUNKS = 6
+
+
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验精排与证据组装所需的入参
+    :return: 元组 (独立问题, 已确认实体 ID, 检索命中, 稠密最高分)
+    :raise ValueError: 计划里没有独立问题
+    """
+    plan = state.get("plan") or {}
+    standalone_query = plan.get("standalone_query", "")
+    if not standalone_query:
+        logger.error("no standalone_query found in plan")
+        raise ValueError("no standalone_query found in plan")
+    hits = state.get("embedding_chunks") or []
+    top_dense = state.get("top_dense") or 0.0
+    return standalone_query, state.get("entity_ids", []), hits, top_dense
 
 
 @node_log("node_rerank")
@@ -24,13 +41,12 @@ def node_rerank(state: QueryGraphState):
     最后精排语义检索结果并追加文本切片。
     上游：node_fact_lookup / node_summary_fetch / node_search_embedding；下游：node_answer_output。
     """
+    standalone_query, entity_ids, hits, top_dense = validate_and_get_data(state)
     docs = get_documents_by_file()
     doc_meta = get_doc_meta_by_id(docs)
-    entity_of_doc = get_entity_of_doc(state.get("entity_ids", []), docs)
+    entity_of_doc = get_entity_of_doc(entity_ids, docs)
     evidence = build_fact_and_summary_evidence(state, doc_meta, entity_of_doc)
 
-    hits = state.get("embedding_chunks") or []
-    top_dense = state.get("top_dense") or 0.0
     sufficient = is_sufficient(evidence, hits, state.get("doc_ids"), top_dense)
     logger.info(f"facts/summaries={len(evidence)} hits={len(hits)} top_dense={top_dense:.3f} sufficient={sufficient}")
     if not sufficient:
@@ -39,7 +55,7 @@ def node_rerank(state: QueryGraphState):
         state["answer"] = REFUSE
         return state
 
-    for i in rerank_hits(state["plan"]["standalone_query"], hits):
+    for i in rerank_hits(standalone_query, hits):
         hit = hits[i]
         item = build_evidence("chunk", hit["text"], doc_meta[hit["doc_id"]], entity_of_doc.get(hit["doc_id"]))
         item["page_start"] = hit["page_start"]
@@ -104,6 +120,7 @@ def build_evidence(kind: str, text: str, doc: dict, entity) -> dict:
     }
 
 
+@step_log("build_fact_and_summary_evidence")
 def build_fact_and_summary_evidence(state: QueryGraphState, doc_meta: dict, entity_of_doc: dict) -> list:
     """财务事实在前、文档摘要在后"""
     evidence = []
@@ -118,6 +135,7 @@ def build_fact_and_summary_evidence(state: QueryGraphState, doc_meta: dict, enti
     return evidence
 
 
+@step_log("is_sufficient")
 def is_sufficient(evidence: list, hits: list, doc_ids, top_dense: float) -> bool:
     """
     证据是否足以交给模型生成
@@ -128,6 +146,7 @@ def is_sufficient(evidence: list, hits: list, doc_ids, top_dense: float) -> bool
     return bool(evidence) or bool(doc_ids) or top_dense >= TAU
 
 
+@step_log("rerank_hits")
 def rerank_hits(query: str, hits: list) -> list:
     """
     云端精排
@@ -135,11 +154,16 @@ def rerank_hits(query: str, hits: list) -> list:
     """
     if not hits:
         return []
+    fallback = list(range(min(TOP_CHUNKS, len(hits))))
     try:
-        return rerank(query, [hit["text"][:2000] for hit in hits], TOP_CHUNKS)
+        order = rerank(query, [hit["text"][:2000] for hit in hits], TOP_CHUNKS)
     except Exception as e:
         logger.warning(f"精排失败，使用 RRF 排序：{e}")
-        return list(range(min(TOP_CHUNKS, len(hits))))
+        return fallback
+    if not order:  # 精排返回空结果时同样退回 RRF 排序，保证证据不为空
+        logger.warning("精排返回空结果，使用 RRF 排序")
+        return fallback
+    return order
 
 
 if __name__ == "__main__":

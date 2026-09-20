@@ -6,7 +6,7 @@
 import json
 import re
 
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.clients.mongo_history_utils import get_history, load_session
 from utils.entity_utils import get_entity_map, pick_option
@@ -30,6 +30,21 @@ TRUE_TEXTS = ("1", "on", "t", "true", "y", "yes")
 FALSE_TEXTS = ("0", "off", "f", "false", "n", "no")
 
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: QueryGraphState):
+    """
+    取出并校验规划所需的入参
+    :return: 元组 (会话标识, 用户原问题)
+    :raise ValueError: 会话标识或问题为空
+    """
+    session_id = state.get("session_id", "")
+    question = state.get("original_query", "")
+    if not session_id or not question:
+        logger.error("no session_id or original_query found in state")
+        raise ValueError("no session_id or original_query found in state")
+    return session_id, question
+
+
 @node_log("node_query_plan")
 def node_query_plan(state: QueryGraphState):
     """
@@ -38,8 +53,7 @@ def node_query_plan(state: QueryGraphState):
     - 否则读取最近几轮历史与焦点对象，调用 LLM 规划（输出无法解析时退回知识类检索）。
     下游：node_entity_confirm。
     """
-    session_id = state["session_id"]
-    question = state["original_query"]
+    session_id, question = validate_and_get_data(state)
     session = load_session(session_id)
     chosen = pick_pending_option(question, session["pending"])
     if chosen is not None:
@@ -58,6 +72,7 @@ def node_query_plan(state: QueryGraphState):
     return state
 
 
+@step_log("pick_pending_option")
 def pick_pending_option(question: str, pending):
     """
     上一轮在等澄清时，把本轮回复与候选对象匹配
@@ -153,6 +168,7 @@ def parse_bool(value, name: str) -> bool:
     raise ValueError(f"{name} 不是布尔值：{value}")
 
 
+@step_log("parse_plan")
 def parse_plan(text: str) -> dict:
     """
     把 LLM 输出解析成查询计划：缺省字段补默认值，取值不合法时报错
@@ -177,6 +193,7 @@ def parse_plan(text: str) -> dict:
     return plan
 
 
+@step_log("plan_query")
 def plan_query(question: str, history: list, focus_names: list) -> dict:
     """
     调用 LLM 生成查询计划

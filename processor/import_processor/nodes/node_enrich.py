@@ -4,7 +4,7 @@
   每个“行 × 列”一条事实，写入 financial_facts；
 - 文档摘要：每份文档一次 LLM 调用（正文截断到 SUMMARY_INPUT_CHARS），写入 documents.summary。
 """
-from common.logging.logger import logger, node_log
+from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.nodes.node_normalize import get_last_page, read_blocks
 from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, read_json
@@ -95,6 +95,7 @@ def _extract_row_facts(table: dict, base: dict) -> list:
     return facts
 
 
+@step_log("save_facts")
 def save_facts(doc: dict, facts: list):
     """覆盖写入文档的财务指标事实（先删后插，重跑不产生重复）"""
     db = get_db()
@@ -120,6 +121,7 @@ def build_summary_input(chunks: list) -> str:
     return "\n".join(parts)[:SUMMARY_INPUT_CHARS]
 
 
+@step_log("summarize")
 def summarize(doc: dict, chunks: list) -> str:
     """调用 LLM 生成文档摘要"""
     text = build_summary_input(chunks)
@@ -129,18 +131,37 @@ def summarize(doc: dict, chunks: list) -> str:
 
 # ---------- 节点 ----------
 
+@step_log("validate_and_get_data")
+def validate_and_get_data(state: ImportGraphState):
+    """
+    取出并校验抽取所需的入参
+    :return: 文档记录
+    :raise ValueError: 状态里没有文档记录，或切片产物不存在
+    """
+    doc = state.get("doc")
+    if not doc:
+        logger.error("no doc found in state")
+        raise ValueError("no doc found in state")
+    chunks_path = get_doc_dir(doc["doc_id"]) / CHUNKS
+    if not chunks_path.is_file():
+        logger.error(f"chunks.json not found: {chunks_path}")
+        raise ValueError(f"chunks.json not found: {chunks_path}")
+    return doc
+
+
 @node_log("node_enrich")
 def node_enrich(state: ImportGraphState):
     """
     节点功能：公司定期报告抽取财务指标事实写入 financial_facts；每份文档生成摘要写入 documents.summary。
     上游 node_import_milvus；导入图的最后一个节点，跑完文档状态变为 ready。
     """
-    doc = state["doc"]
+    doc = validate_and_get_data(state)
     summary = enrich_document(doc)
     mark_ready(doc, {"summary": summary})
     return state
 
 
+@step_log("enrich_document")
 def enrich_document(doc: dict) -> str:
     """抽取并保存财务指标事实（仅公司定期报告），返回文档摘要"""
     doc_dir = get_doc_dir(doc["doc_id"])
