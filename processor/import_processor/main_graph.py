@@ -1,6 +1,6 @@
 """
 导入图（LangGraph）：一次执行处理一个文件。
-node_entry → node_parse → node_chunk → node_index → node_enrich
+node_entry → node_parse → node_chunk → node_enrich → node_index
 
 一次导入从头跑到尾：同哈希且已就绪的文件在 node_entry 判定为 skip 直接结束，其余整条流水线重做
 （解析结果按文件哈希缓存在 data/artifacts，重做不会重复调用 MinerU）。
@@ -26,8 +26,8 @@ workflow = StateGraph(ImportGraphState)
 workflow.add_node("node_entry", node_entry)
 workflow.add_node("node_parse", node_parse)
 workflow.add_node("node_chunk", node_chunk)
-workflow.add_node("node_index", node_index)
 workflow.add_node("node_enrich", node_enrich)
+workflow.add_node("node_index", node_index)
 workflow.set_entry_point("node_entry")
 
 
@@ -41,9 +41,9 @@ def route_after_entry(state: ImportGraphState) -> str:
 # 2. 入口之后按登记结果分支，其余节点顺序执行
 workflow.add_conditional_edges("node_entry", route_after_entry, {"node_parse": "node_parse", END: END})
 workflow.add_edge("node_parse", "node_chunk")
-workflow.add_edge("node_chunk", "node_index")
-workflow.add_edge("node_index", "node_enrich")
-workflow.add_edge("node_enrich", END)
+workflow.add_edge("node_chunk", "node_enrich")
+workflow.add_edge("node_enrich", "node_index")
+workflow.add_edge("node_index", END)
 
 # 3. 编译成可执行的图
 kb_import_app = workflow.compile()

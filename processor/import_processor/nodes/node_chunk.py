@@ -1,7 +1,7 @@
 """
 节点：切片。content_list.json → 版面块 → chunks.json。
 版面块的整理规则（丢页眉页码、推断标题层级、跨页合并、单位行并入、图片描述）在 utils/block_utils.py，
-本节点负责调用它并把版面块切成检索切片：
+本节点负责调用它并把版面块切成检索切片（财务事实与文档摘要由下游 node_enrich 追加）：
 - 正文按章节聚合：目标 CHUNK_TARGET_CHARS 字、上限 CHUNK_MAX_CHARS 字；缓冲不足 CHUNK_MIN_CHARS 字时跨小节继续累积，
   标题行保留在切片正文中；超长段落按句切分；
 - 表格独立成块：展示文本 = 标题/说明行 + Markdown 表格 + 表注；向量文本 = 说明 + 逐行线性化；
@@ -18,7 +18,6 @@ from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import CHUNKS, CONTENT_LIST, get_doc_dir, write_json
 from utils.block_utils import get_last_page, normalize_document
 from utils.table_html_utils import get_unit_hint, linearize_rows, parse_table, split_rows, to_markdown
-from utils.task_utils import save_doc_fields
 
 # 切分参数（评测结果里会记录）
 CHUNK_TARGET_CHARS = 600  # 正文切片目标长度，缓冲累积到该长度即断开
@@ -244,12 +243,11 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_chunk")
 def node_chunk(state: ImportGraphState):
     """
-    节点功能：把解析结果整理成版面块，再切成检索切片 chunks.json，记录切片数。
-    上游 node_parse 产出 content_list.json；下游 node_index 读取 chunks.json 计算向量并写入 Milvus。
+    节点功能：把解析结果整理成版面块，再切成检索切片 chunks.json。
+    上游 node_parse 产出 content_list.json；下游 node_enrich 往 chunks.json 里追加事实与摘要切片。
     """
     doc = validate_and_get_data(state)
-    chunk_count = chunk_document(doc["doc_id"])
-    save_doc_fields(doc, {"chunk_count": chunk_count})
+    chunk_document(doc["doc_id"])
     return state
 
 

@@ -69,7 +69,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "page_count": None,
         "chunk_count": None,
         "supersedes": supersedes,
-        "summary": None,
         "created_at": now,
         "updated_at": now,
     }

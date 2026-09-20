@@ -1,0 +1,4225 @@
+{
+ "meta": {
+  "tag": "simplify-batch3",
+  "mode": "retrieval",
+  "created_at": "2026-09-20T16:36:32",
+  "git": "3290c94-dirty",
+  "eval_set": "data/eval/fin_eval_set.jsonl",
+  "n_items": 67,
+  "config": {
+   "embedding": "bge-m3",
+   "bge_max_length": 2048,
+   "retrieval": "dense(COSINE,HNSW)+sparse(IP) 各取 30，RRF k=60，top 10",
+   "embed_text": "document_title · content_type · section_path + body（表格为线性化文本）",
+   "chunk": {
+    "target": 600,
+    "max": 1000,
+    "min": 200,
+    "table_max": 3000
+   },
+   "multiturn_query": "历史问题与当前问题直接拼接（M1 无会话状态）"
+  }
+ },
+ "summary": {
+  "by_category": {
+   "announcement": {
+    "n": 10,
+    "hit@1": 0.6,
+    "hit@3": 0.9,
+    "hit@5": 0.9,
+    "hit@10": 1.0,
+    "mrr@10": 0.7267
+   },
+   "compliance": {
+    "n": 2,
+    "hit@1": 0.5,
+    "hit@3": 0.5,
+    "hit@5": 0.5,
+    "hit@10": 0.5,
+    "mrr@10": 0.5
+   },
+   "knowledge": {
+    "n": 7,
+    "hit@1": 0.7143,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.8095
+   },
+   "multiturn_followup": {
+    "n": 8,
+    "hit@1": 0.5,
+    "hit@3": 0.625,
+    "hit@5": 0.75,
+    "hit@10": 1.0,
+    "mrr@10": 0.6262
+   },
+   "multiturn_t1": {
+    "n": 3,
+    "hit@1": 0.0,
+    "hit@3": 0.3333,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.3333
+   },
+   "process": {
+    "n": 6,
+    "hit@1": 0.5,
+    "hit@3": 0.6667,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.65
+   },
+   "product": {
+    "n": 12,
+    "hit@1": 0.5833,
+    "hit@3": 0.8333,
+    "hit@5": 0.8333,
+    "hit@10": 0.9167,
+    "mrr@10": 0.7202
+   },
+   "risk": {
+    "n": 7,
+    "hit@1": 0.4286,
+    "hit@3": 0.7143,
+    "hit@5": 0.7143,
+    "hit@10": 0.7143,
+    "mrr@10": 0.5714
+   }
+  },
+  "file_level_by_category": {
+   "announcement": {
+    "n": 10,
+    "hit@1": 0.9,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.95
+   },
+   "compliance": {
+    "n": 2,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   },
+   "knowledge": {
+    "n": 7,
+    "hit@1": 0.8571,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 0.9048
+   },
+   "multiturn_followup": {
+    "n": 8,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   },
+   "multiturn_t1": {
+    "n": 3,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   },
+   "process": {
+    "n": 6,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   },
+   "product": {
+    "n": 12,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   },
+   "risk": {
+    "n": 7,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "hit@10": 1.0,
+    "mrr@10": 1.0
+   }
+  },
+  "overall": {
+   "n": 55,
+   "hit@1": 0.5273,
+   "hit@3": 0.7636,
+   "hit@5": 0.8545,
+   "hit@10": 0.9273,
+   "mrr@10": 0.6634
+  },
+  "latency_ms": {
+   "n": 75,
+   "min": 392.9,
+   "p10": 396.2,
+   "median": 401.1,
+   "p90": 598.4,
+   "max": 601.5
+  }
+ },
+ "records": [
+  {
+   "id": "prod-001",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "华夏债券C的基金代码是多少？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 462.4,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0012",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03126,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-002",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "华夏债券C的风险等级是R几？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03227,
+   "latency_ms": 394.9,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03227,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03227,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03077,
+     "hit": true
+    }
+   ]
+  },
+  {
+   "id": "prod-003",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "华夏自由现金流ETF联接这只基金风险等级是多少？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 398.0,
+   "top": [
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0010",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.032,
+     "hit": true
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0014",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03128,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03102,
+     "hit": true
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03101,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-004",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "华夏国证自由现金流联接基金的托管人是哪家？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 398.6,
+   "top": [
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0013",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03202,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0010",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.0308,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03077,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-005",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "华夏自由现金流联接基金的钱主要投到哪里去？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 405.9,
+   "top": [
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03227,
+     "hit": true
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0010",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0014",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03055,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.0303,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-006",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "易方达智造优势C每年要扣多少销售服务费？",
+   "has_gold": true,
+   "rank": 7,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 394.5,
+   "top": [
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0004",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0005",
+     "kind": "text",
+     "pages": "1-3",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0008",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.03054,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0011",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03054,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03041,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-007",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "易方达智造C我买了20天就想卖，要交赎回费吗？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 600.4,
+   "top": [
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0004",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0005",
+     "kind": "text",
+     "pages": "1-3",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0008",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.03078,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0006",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.02996,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.02988,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-008",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "易方达智造优势这只基金有哪些特有的风险？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 397.9,
+   "top": [
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0008",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0005",
+     "kind": "text",
+     "pages": "1-3",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03102,
+     "hit": false
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03055,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-009",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "建行利得盈2013年第17期这款理财风险等级是多少？",
+   "has_gold": true,
+   "rank": null,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 401.1,
+   "top": [
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0006",
+     "kind": "table",
+     "pages": "4-4",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0016",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0013",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.03102,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02996,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0007",
+     "kind": "table",
+     "pages": "4-4",
+     "score": 0.02991,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-010",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "中行那款私行晋级专属的智荟系列240040期，什么样的投资者能买？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 398.1,
+   "top": [
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.03227,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0004",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0012",
+     "kind": "text",
+     "pages": "8-8",
+     "score": 0.02831,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-011",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "中银理财稳汇固收增强（美元年年开）07期是一款什么类型的产品？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 398.0,
+   "top": [
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03078,
+     "hit": false
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0015",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02991,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "prod-012",
+   "turn": 1,
+   "category": "product",
+   "expect": "answer",
+   "query": "中银理财美元年年开07期平时可以随时赎回吗？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 403.9,
+   "top": [
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0005",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0006",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0012",
+     "kind": "text",
+     "pages": "8-8",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0003",
+     "kind": "text",
+     "pages": "2-2",
+     "score": 0.03012,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-001",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "茅台今年一季度营业收入是多少？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 402.2,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0014",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0005",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0011",
+     "kind": "table",
+     "pages": "8-10",
+     "score": 0.03041,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03037,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0016",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03009,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-002",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "茅台一季度经营现金流为什么暴增？",
+   "has_gold": true,
+   "rank": 3,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 393.9,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0012",
+     "kind": "table",
+     "pages": "10-12",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0018",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0004",
+     "kind": "table",
+     "pages": "2-2",
+     "score": 0.0315,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.0308,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0011",
+     "kind": "table",
+     "pages": "8-10",
+     "score": 0.02963,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-003",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "平安银行一季度末的不良率是多少？",
+   "has_gold": true,
+   "rank": 3,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 398.6,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0050",
+     "kind": "table",
+     "pages": "21-21",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0051",
+     "kind": "text",
+     "pages": "21-21",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0048",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.03128,
+     "hit": true
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0013",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03101,
+     "hit": true
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0008",
+     "kind": "table",
+     "pages": "5-5",
+     "score": 0.03055,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-004",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "平安银行一季度净息差为什么下降了？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 403.4,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0043",
+     "kind": "text",
+     "pages": "18-18",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03226,
+     "hit": true
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0112",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0046",
+     "kind": "text",
+     "pages": "19-19",
+     "score": 0.03033,
+     "hit": false
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0019",
+     "kind": "text",
+     "pages": "9-9",
+     "score": 0.03008,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-005",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "招行一季度营收同比增长了多少？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.02905,
+   "latency_ms": 406.1,
+   "top": [
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0071",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02905,
+     "hit": true
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0015",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.0284,
+     "hit": false
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0011",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.0275,
+     "hit": true
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.01639,
+     "hit": false
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0056",
+     "kind": "fact",
+     "pages": "2-2",
+     "score": 0.01613,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-006",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "招行一季报里对资产质量提示了哪些风险？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 2,
+   "top_score": 0.03202,
+   "latency_ms": 588.6,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0048",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.03202,
+     "hit": false
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0027",
+     "kind": "text",
+     "pages": "10-10",
+     "score": 0.03178,
+     "hit": true
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0025",
+     "kind": "text",
+     "pages": "9-9",
+     "score": 0.0308,
+     "hit": false
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0071",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03008,
+     "hit": false
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0034",
+     "kind": "text",
+     "pages": "12-12",
+     "score": 0.02867,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-007",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "央行这期货币政策执行报告里，下一阶段货币政策的主要思路是什么？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 402.5,
+   "top": [
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0076",
+     "kind": "text",
+     "pages": "52-53",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0078",
+     "kind": "text",
+     "pages": "55-55",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0077",
+     "kind": "text",
+     "pages": "53-54",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0079",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0003",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03009,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-008",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "最近家电行业有哪些观点？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 399.4,
+   "top": [
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0073",
+     "kind": "text",
+     "pages": "48-49",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0024",
+     "kind": "text",
+     "pages": "6-7",
+     "score": 0.03083,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0045",
+     "kind": "table",
+     "pages": "11-11",
+     "score": 0.02921,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0067",
+     "kind": "text",
+     "pages": "17-18",
+     "score": 0.02903,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0068",
+     "kind": "text",
+     "pages": "18-18",
+     "score": 0.02858,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-009",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "2025年全国GDP是多少？",
+   "has_gold": true,
+   "rank": 10,
+   "file_rank": 1,
+   "top_score": 0.03132,
+   "latency_ms": 396.3,
+   "top": [
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0005",
+     "kind": "table",
+     "pages": "2-2",
+     "score": 0.03132,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0044",
+     "kind": "table",
+     "pages": "11-11",
+     "score": 0.02881,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0010",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.02879,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.02861,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0001",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.0283,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "ann-010",
+   "turn": 1,
+   "category": "announcement",
+   "expect": "answer",
+   "query": "2025年统计公报对全年经济是怎么总结的？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03226,
+   "latency_ms": 399.8,
+   "top": [
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03226,
+     "hit": true
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0005",
+     "kind": "table",
+     "pages": "2-2",
+     "score": 0.03089,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0076",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02874,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0004",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.02828,
+     "hit": false
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0010",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.02788,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-001",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "在银行买的理财产品，能保证本金不亏吗？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03227,
+   "latency_ms": 403.5,
+   "top": [
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03227,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0012",
+     "kind": "text",
+     "pages": "8-8",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.02963,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0008",
+     "kind": "image_desc",
+     "pages": "11-11",
+     "score": 0.02955,
+     "hit": true
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0013",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.02844,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-002",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "理财产品说明书上写着风险级别“2级（中低风险）”，这具体代表什么？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 596.8,
+   "top": [
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0003",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03101,
+     "hit": false
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0013",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.0303,
+     "hit": false
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0014",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.02901,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-003",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "那些宣传收益特别高的产品，风险是不是也会更大？",
+   "has_gold": true,
+   "rank": null,
+   "file_rank": 1,
+   "top_score": 0.03227,
+   "latency_ms": 404.9,
+   "top": [
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0052",
+     "kind": "text",
+     "pages": "34-35",
+     "score": 0.03227,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0002",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0009",
+     "kind": "text",
+     "pages": "10-11",
+     "score": 0.03002,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0050",
+     "kind": "image_desc",
+     "pages": "35-35",
+     "score": 0.02831,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0007",
+     "kind": "image_desc",
+     "pages": "11-11",
+     "score": 0.02821,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-004",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "股票基金、债券基金、货币基金这几类，哪种风险最小？",
+   "has_gold": true,
+   "rank": null,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 396.1,
+   "top": [
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0013",
+     "kind": "text",
+     "pages": "10-10",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0014",
+     "kind": "image_desc",
+     "pages": "11-11",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0015",
+     "kind": "text",
+     "pages": "11-12",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0009",
+     "kind": "table",
+     "pages": "8-8",
+     "score": 0.03101,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0042",
+     "kind": "image_desc",
+     "pages": "29-29",
+     "score": 0.02942,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-005",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "第一次买基金，下单之前我应该先考虑清楚哪些事？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03089,
+   "latency_ms": 396.9,
+   "top": [
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0003",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03089,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0000",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03012,
+     "hit": true
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0006",
+     "kind": "text",
+     "pages": "5-6",
+     "score": 0.02901,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0005",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.02853,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0003",
+     "kind": "text",
+     "pages": "3-4",
+     "score": 0.02736,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-006",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "要是不小心参与了非法集资，亏掉的钱能找谁赔？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 398.5,
+   "top": [
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0065",
+     "kind": "text",
+     "pages": "41-41",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0005",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0064",
+     "kind": "image_desc",
+     "pages": "42-42",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0003",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.0308,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0006",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.0308,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "risk-007",
+   "turn": 1,
+   "category": "risk",
+   "expect": "answer",
+   "query": "有私募的人跟我保证本金不会亏，还承诺最低收益，这种说法靠谱吗？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03202,
+   "latency_ms": 402.1,
+   "top": [
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0001",
+     "kind": "text",
+     "pages": "2-2",
+     "score": 0.03202,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0000",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03154,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0008",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0003",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03126,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0002",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03037,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-001",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "老听人说买ETF，ETF到底是个什么东西？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03227,
+   "latency_ms": 401.4,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03227,
+     "hit": true
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0004",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03089,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0001",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03031,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0018",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03008,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0021",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.02983,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-002",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "什么样的基金才能叫债券基金？",
+   "has_gold": true,
+   "rank": 3,
+   "file_rank": 3,
+   "top_score": 0.03227,
+   "latency_ms": 399.3,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0008",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03227,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0013",
+     "kind": "text",
+     "pages": "10-10",
+     "score": 0.03128,
+     "hit": true
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0015",
+     "kind": "text",
+     "pages": "11-12",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0009",
+     "kind": "table",
+     "pages": "8-8",
+     "score": 0.0311,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-003",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "场外买普通开放式基金，成交价格是按什么来算的？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03175,
+   "latency_ms": 398.9,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": true
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0055",
+     "kind": "text",
+     "pages": "35-35",
+     "score": 0.03068,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0019",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03028,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0015",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.02971,
+     "hit": false
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0012",
+     "kind": "table",
+     "pages": "9-9",
+     "score": 0.02964,
+     "hit": true
+    }
+   ]
+  },
+  {
+   "id": "know-004",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "ETF的申购赎回跟普通开放式基金的申购赎回有什么不一样？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 598.8,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0015",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.03178,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0016",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0017",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03055,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-005",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "个人想买私募基金，需要满足什么门槛？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 397.8,
+   "top": [
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0003",
+     "kind": "text",
+     "pages": "3-4",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0004",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.0315,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0000",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.03078,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0001",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03068,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-006",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "怎么分辨一个投资项目是不是非法集资，它通常有什么特征？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 398.9,
+   "top": [
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0006",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0005",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03126,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0008",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03055,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0003",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03037,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "know-007",
+   "turn": 1,
+   "category": "knowledge",
+   "expect": "answer",
+   "query": "去银行办业务，柜员说必须顺带买一份别的产品才给办，这样做合规吗？",
+   "has_gold": true,
+   "rank": 3,
+   "file_rank": 1,
+   "top_score": 0.02422,
+   "latency_ms": 599.8,
+   "top": [
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0020",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02422,
+     "hit": false
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0031",
+     "kind": "text",
+     "pages": "13-13",
+     "score": 0.01639,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0004",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.01639,
+     "hit": true
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0035",
+     "kind": "table",
+     "pages": "13-13",
+     "score": 0.01613,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0006",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.01613,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "proc-001",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "我已经有炒股的账户了，想买ETF还要不要另外开户？",
+   "has_gold": true,
+   "rank": 5,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 401.8,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0001",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0004",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03041,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03031,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0020",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.0303,
+     "hit": true
+    }
+   ]
+  },
+  {
+   "id": "proc-002",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "场外买普通开放式基金，申购和赎回大概各收多少手续费？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03105,
+   "latency_ms": 596.9,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0002",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03105,
+     "hit": true
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0015",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.03068,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0005",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03028,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0016",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.02996,
+     "hit": false
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0007",
+     "kind": "text",
+     "pages": "3-4",
+     "score": 0.02878,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "proc-003",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "货币ETF卖出或者赎回以后，钱多久能到账？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 601.5,
+   "top": [
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0010",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0026",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0025",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0017",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.0303,
+     "hit": false
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0016",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.03012,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "proc-004",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "跟银行在金融服务上起了纠纷，应该走什么途径投诉？",
+   "has_gold": true,
+   "rank": 5,
+   "file_rank": 1,
+   "top_score": 0.0315,
+   "latency_ms": 399.4,
+   "top": [
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0012",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0015",
+     "kind": "image_desc",
+     "pages": "15-15",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0014",
+     "kind": "text",
+     "pages": "13-14",
+     "score": 0.03132,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0011",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03105,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03068,
+     "hit": true
+    }
+   ]
+  },
+  {
+   "id": "proc-005",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "我通过人民银行投诉了某家银行，银行最迟要在多长时间内给我答复？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 600.1,
+   "top": [
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0011",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0012",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "中国人民银行金融消费者权益保护实施办法.pdf",
+     "chunk_id": "7cd17ababafd9b18-0017",
+     "kind": "text",
+     "pages": "7-7",
+     "score": 0.03101,
+     "hit": false
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0014",
+     "kind": "text",
+     "pages": "13-14",
+     "score": 0.03008,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "proc-006",
+   "turn": 1,
+   "category": "process",
+   "expect": "answer",
+   "query": "买的私募基金管理人跑路了，投资者有哪些正规的维权渠道？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 397.6,
+   "top": [
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0007",
+     "kind": "text",
+     "pages": "7-7",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0008",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0002",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "私募基金投资者教育知识问答.docx",
+     "chunk_id": "12922ec4f11d29a3-0004",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03054,
+     "hit": false
+    },
+    {
+     "file": "投资者问答.pdf",
+     "chunk_id": "50a99902e1233ac3-0003",
+     "kind": "text",
+     "pages": "3-4",
+     "score": 0.03037,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "neg-001",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "宁德时代2026年一季度营收是多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03175,
+   "latency_ms": 402.9,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03175,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0048",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.03068,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0012",
+     "kind": "table",
+     "pages": "10-12",
+     "score": 0.02837,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0039",
+     "kind": "table",
+     "pages": "17-17",
+     "score": 0.02832,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0011",
+     "kind": "table",
+     "pages": "8-10",
+     "score": 0.02822,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-002",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "工商银行一季度净利润有多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03279,
+   "latency_ms": 396.6,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0076",
+     "kind": "fact",
+     "pages": "3-3",
+     "score": 0.03279,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0075",
+     "kind": "fact",
+     "pages": "3-3",
+     "score": 0.03226,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0059",
+     "kind": "fact",
+     "pages": "2-2",
+     "score": 0.03126,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03102,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0058",
+     "kind": "fact",
+     "pages": "2-2",
+     "score": 0.03078,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-003",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "比亚迪今年一季度卖了多少辆车？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03175,
+   "latency_ms": 601.1,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0015",
+     "kind": "text",
+     "pages": "7-7",
+     "score": 0.03175,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0102",
+     "kind": "fact",
+     "pages": "5-5",
+     "score": 0.02986,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0048",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.02901,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0004",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.02826,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.02652,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-004",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "易方达蓝筹精选混合的基金经理是谁？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03279,
+   "latency_ms": 397.7,
+   "top": [
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.032,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03128,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0005",
+     "kind": "text",
+     "pages": "1-3",
+     "score": 0.03102,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03101,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-005",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "什么是量子计算？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.0311,
+   "latency_ms": 404.2,
+   "top": [
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0068",
+     "kind": "text",
+     "pages": "18-18",
+     "score": 0.0311,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0069",
+     "kind": "text",
+     "pages": "18-19",
+     "score": 0.03078,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0071",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.03037,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0073",
+     "kind": "text",
+     "pages": "21-21",
+     "score": 0.02976,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0025",
+     "kind": "table",
+     "pages": "7-7",
+     "score": 0.02533,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-006",
+   "turn": 1,
+   "category": "negative",
+   "expect": "realtime_notice",
+   "query": "贵州茅台今天的股价是多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03175,
+   "latency_ms": 396.2,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0007",
+     "kind": "table",
+     "pages": "3-4",
+     "score": 0.03175,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.0311,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03089,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0008",
+     "kind": "text",
+     "pages": "3-5",
+     "score": 0.03078,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0024",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02996,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-007",
+   "turn": 1,
+   "category": "negative",
+   "expect": "realtime_notice",
+   "query": "华夏债券C最新的基金净值是多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03252,
+   "latency_ms": 400.3,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03252,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0004",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03175,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.0315,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0003",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.03008,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-008",
+   "turn": 1,
+   "category": "negative",
+   "expect": "realtime_notice",
+   "query": "招商银行股票今天涨了还是跌了？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.032,
+   "latency_ms": 401.7,
+   "top": [
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0055",
+     "kind": "fact",
+     "pages": "2-2",
+     "score": 0.032,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0054",
+     "kind": "fact",
+     "pages": "2-2",
+     "score": 0.0311,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0011",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.02991,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0018",
+     "kind": "text",
+     "pages": "7-7",
+     "score": 0.02837,
+     "hit": null
+    },
+    {
+     "file": "招商银行二○二六年第一季度报告.pdf",
+     "chunk_id": "2b88b8369eb0fdfd-0003",
+     "kind": "table",
+     "pages": "2-2",
+     "score": 0.0275,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-009",
+   "turn": 1,
+   "category": "negative",
+   "expect": "realtime_notice",
+   "query": "现在比特币多少钱一个？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03105,
+   "latency_ms": 398.1,
+   "top": [
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0049",
+     "kind": "text",
+     "pages": "33-34",
+     "score": 0.03105,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0059",
+     "kind": "table",
+     "pages": "39-39",
+     "score": 0.02286,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0039",
+     "kind": "table",
+     "pages": "26-26",
+     "score": 0.01639,
+     "hit": null
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0048",
+     "kind": "image_desc",
+     "pages": "34-34",
+     "score": 0.01639,
+     "hit": null
+    },
+    {
+     "file": "中华人民共和国2025年国民经济和社会发展统计公报 - 国家统计局.pdf",
+     "chunk_id": "b744d917c9286d02-0012",
+     "kind": "text",
+     "pages": "3-4",
+     "score": 0.01613,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-010",
+   "turn": 1,
+   "category": "negative",
+   "expect": "realtime_notice",
+   "query": "最新一期的LPR是多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03279,
+   "latency_ms": 405.2,
+   "top": [
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0047",
+     "kind": "text",
+     "pages": "30-31",
+     "score": 0.03279,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0014",
+     "kind": "text",
+     "pages": "10-11",
+     "score": 0.03226,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0013",
+     "kind": "table",
+     "pages": "11-11",
+     "score": 0.0315,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0079",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03101,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0034",
+     "kind": "text",
+     "pages": "23-23",
+     "score": 0.03058,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-011",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "什么是最大回撤？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03083,
+   "latency_ms": 397.8,
+   "top": [
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0043",
+     "kind": "table",
+     "pages": "29-29",
+     "score": 0.03083,
+     "hit": null
+    },
+    {
+     "file": "中国货币政策执行报告.pdf",
+     "chunk_id": "4bf30078e68f4b53-0046",
+     "kind": "image_desc",
+     "pages": "31-31",
+     "score": 0.03048,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0008",
+     "kind": "text",
+     "pages": "3-5",
+     "score": 0.03037,
+     "hit": null
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0005",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.02881,
+     "hit": null
+    },
+    {
+     "file": "ETF基金投资者教育问答.doc",
+     "chunk_id": "cbe03a1e074e8c08-0016",
+     "kind": "image_desc",
+     "pages": "1-1",
+     "score": 0.0275,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-012",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "净值型理财是什么意思？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03226,
+   "latency_ms": 395.7,
+   "top": [
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03226,
+     "hit": null
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0004",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.0315,
+     "hit": null
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0003",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.03132,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0004",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.03078,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0003",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.02921,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "neg-013",
+   "turn": 1,
+   "category": "negative",
+   "expect": "refuse",
+   "query": "理财产品风险等级R3代表什么？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03227,
+   "latency_ms": 404.5,
+   "top": [
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0020",
+     "kind": "image_desc",
+     "pages": "15-15",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0013",
+     "kind": "text",
+     "pages": "8-9",
+     "score": 0.02991,
+     "hit": null
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0016",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.02901,
+     "hit": null
+    },
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0011",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.02885,
+     "hit": null
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.02822,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-001",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "茅台一季度业绩不错，现在该买茅台股票吗？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.0315,
+   "latency_ms": 395.6,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0024",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.0315,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0016",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03054,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03048,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0017",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03012,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02976,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-002",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "给我推荐一个稳赚不赔的理财产品吧",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03227,
+   "latency_ms": 408.0,
+   "top": [
+    {
+     "file": "中银理财有限责任公司理财产品风险揭示书.pdf",
+     "chunk_id": "0799c58c062f3bd8-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.03175,
+     "hit": null
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.0308,
+     "hit": null
+    },
+    {
+     "file": "消费者金融素养问卷调查报告.pdf",
+     "chunk_id": "a2949ddf36a3d56c-0009",
+     "kind": "text",
+     "pages": "10-11",
+     "score": 0.03077,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0038",
+     "kind": "text",
+     "pages": "16-17",
+     "score": 0.02991,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-003",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "answer",
+   "query": "华夏债券C保本吗？能保证收益吗？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 392.9,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.032,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0011",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03055,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "comp-004",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "我有10万块闲钱，应该买华夏债券C还是易方达智造优势混合？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03279,
+   "latency_ms": 598.1,
+   "top": [
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03226,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0005",
+     "kind": "text",
+     "pages": "1-3",
+     "score": 0.0315,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.0308,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0008",
+     "kind": "text",
+     "pages": "3-3",
+     "score": 0.03055,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-005",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "茅台营收一直在涨，它的股票是不是一定会上涨？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.0311,
+   "latency_ms": 401.6,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0008",
+     "kind": "text",
+     "pages": "3-5",
+     "score": 0.0311,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0024",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03102,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0000",
+     "kind": "text",
+     "pages": "1-1",
+     "score": 0.03041,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02964,
+     "hit": null
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0010",
+     "kind": "table",
+     "pages": "5-8",
+     "score": 0.02939,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-006",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "answer",
+   "query": "建行那个利得盈理财是不是稳赚不赔的？",
+   "has_gold": true,
+   "rank": null,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 401.3,
+   "top": [
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0006",
+     "kind": "table",
+     "pages": "4-4",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0016",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0013",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0010",
+     "kind": "text",
+     "pages": "5-5",
+     "score": 0.03102,
+     "hit": false
+    },
+    {
+     "file": "中国建设银行人民币理财产品风险揭示书（非保本）.pdf",
+     "chunk_id": "f15f62ca4fc0b8b5-0009",
+     "kind": "text",
+     "pages": "4-5",
+     "score": 0.03101,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "comp-007",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "我是保守型投资者，帮我配置一个投资组合",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03227,
+   "latency_ms": 397.1,
+   "top": [
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0021",
+     "kind": "text",
+     "pages": "15-15",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "易方达智造优势混合型证券投资基金（易方达智造优势混合C）基金产品资料概要更新.pdf",
+     "chunk_id": "e958c7fd46a18e1e-0002",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.032,
+     "hit": null
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0018",
+     "kind": "text",
+     "pages": "13-13",
+     "score": 0.03132,
+     "hit": null
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0003",
+     "kind": "image_desc",
+     "pages": "2-2",
+     "score": 0.03101,
+     "hit": null
+    },
+    {
+     "file": "基金基础知识.pdf",
+     "chunk_id": "b1b2cf37166a26a0-0007",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03054,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "comp-008",
+   "turn": 1,
+   "category": "compliance",
+   "expect": "decline_advice",
+   "query": "平安银行一季度利润增速放缓了，我是不是应该把它的股票卖掉？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03227,
+   "latency_ms": 402.6,
+   "top": [
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0012",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0102",
+     "kind": "fact",
+     "pages": "5-5",
+     "score": 0.02963,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0010",
+     "kind": "table",
+     "pages": "5-5",
+     "score": 0.02858,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0048",
+     "kind": "text",
+     "pages": "20-20",
+     "score": 0.02608,
+     "hit": null
+    },
+    {
+     "file": "2026-04-25 平安银行股份有限公司2026年第一季度报告.pdf",
+     "chunk_id": "02f2d1fe407005a2-0071",
+     "kind": "fact",
+     "pages": "3-3",
+     "score": 0.02439,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "mt-001",
+   "turn": 1,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "华夏债券C这个基金风险高吗？",
+   "has_gold": true,
+   "rank": 4,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 397.0,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03102,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03101,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-001",
+   "turn": 2,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "华夏债券C这个基金风险高吗？ 它适合稳健型的用户吗？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 400.1,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.032,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03102,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03101,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-001",
+   "turn": 3,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "华夏债券C这个基金风险高吗？ 它适合稳健型的用户吗？ 那赎回有没有什么限制？",
+   "has_gold": true,
+   "rank": 6,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 598.4,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0010",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0002",
+     "kind": "text",
+     "pages": "1-2",
+     "score": 0.0315,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03105,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-002",
+   "turn": 1,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "中国银行那款智荟系列240040期理财，期限多长？",
+   "has_gold": true,
+   "rank": 2,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 402.6,
+   "top": [
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.03226,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0004",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0007",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03031,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-002",
+   "turn": 2,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "中国银行那款智荟系列240040期理财，期限多长？ 它风险大不大？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 597.9,
+   "top": [
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03279,
+     "hit": true
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.032,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0004",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0007",
+     "kind": "text",
+     "pages": "6-6",
+     "score": 0.03008,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-002",
+   "turn": 3,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "中国银行那款智荟系列240040期理财，期限多长？ 它风险大不大？ 要是中途急用钱，能提前赎回吗？",
+   "has_gold": true,
+   "rank": 5,
+   "file_rank": 1,
+   "top_score": 0.03279,
+   "latency_ms": 598.9,
+   "top": [
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0005",
+     "kind": "table",
+     "pages": "4-5",
+     "score": 0.03279,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03226,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0018",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0004",
+     "kind": "text",
+     "pages": "2-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "中国银行股份有限公司理财产品风险揭示书.pdf",
+     "chunk_id": "64f0a94992227a01-0012",
+     "kind": "text",
+     "pages": "8-8",
+     "score": 0.03054,
+     "hit": true
+    }
+   ]
+  },
+  {
+   "id": "mt-003",
+   "turn": 1,
+   "category": "multiturn",
+   "expect": "clarify",
+   "query": "华夏的那只基金管理费多少？",
+   "has_gold": false,
+   "rank": null,
+   "file_rank": null,
+   "top_score": 0.03227,
+   "latency_ms": 402.9,
+   "top": [
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0006",
+     "kind": "table",
+     "pages": "3-4",
+     "score": 0.03227,
+     "hit": null
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03126,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03083,
+     "hit": null
+    },
+    {
+     "file": "华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金产品资料概要更新.pdf",
+     "chunk_id": "c350b0e5c2e18bcd-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03055,
+     "hit": null
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.02991,
+     "hit": null
+    }
+   ]
+  },
+  {
+   "id": "mt-003",
+   "turn": 2,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "华夏的那只基金管理费多少？ 债券那只",
+   "has_gold": true,
+   "rank": 7,
+   "file_rank": 1,
+   "top_score": 0.03132,
+   "latency_ms": 398.0,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03132,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03128,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03126,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0005",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03125,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0008",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03105,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-003",
+   "turn": 3,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "华夏的那只基金管理费多少？ 债券那只 托管费呢？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03202,
+   "latency_ms": 399.2,
+   "top": [
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0006",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03202,
+     "hit": true
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0000",
+     "kind": "table",
+     "pages": "1-1",
+     "score": 0.03154,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0009",
+     "kind": "text",
+     "pages": "4-4",
+     "score": 0.03151,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0013",
+     "kind": "summary",
+     "pages": "0-0",
+     "score": 0.03105,
+     "hit": false
+    },
+    {
+     "file": "华夏债券投资基金（华夏债券C）基金产品资料概要更新.pdf",
+     "chunk_id": "f277f7921cb15a55-0008",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03058,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-004",
+   "turn": 1,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "茅台一季度营收多少？",
+   "has_gold": true,
+   "rank": 4,
+   "file_rank": 1,
+   "top_score": 0.03175,
+   "latency_ms": 399.2,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0005",
+     "kind": "table",
+     "pages": "3-3",
+     "score": 0.03175,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03031,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0016",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03008,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0014",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02973,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0018",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02957,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-004",
+   "turn": 2,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "茅台一季度营收多少？ 那归母净利润呢？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 399.3,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0016",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0017",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.03102,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0011",
+     "kind": "table",
+     "pages": "8-10",
+     "score": 0.03033,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02985,
+     "hit": false
+    }
+   ]
+  },
+  {
+   "id": "mt-004",
+   "turn": 3,
+   "category": "multiturn",
+   "expect": "answer",
+   "query": "茅台一季度营收多少？ 那归母净利润呢？ 同比增长了多少？",
+   "has_gold": true,
+   "rank": 1,
+   "file_rank": 1,
+   "top_score": 0.03252,
+   "latency_ms": 600.4,
+   "top": [
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0016",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0017",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.03252,
+     "hit": false
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0001",
+     "kind": "table",
+     "pages": "1-2",
+     "score": 0.0315,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0011",
+     "kind": "table",
+     "pages": "8-10",
+     "score": 0.03012,
+     "hit": true
+    },
+    {
+     "file": "贵州茅台酒股份有限公司2026 年第一季度报告.pdf",
+     "chunk_id": "ca10d0e4fb3a1e4e-0023",
+     "kind": "fact",
+     "pages": "1-2",
+     "score": 0.02985,
+     "hit": false
+    }
+   ]
+  }
+ ]
+}

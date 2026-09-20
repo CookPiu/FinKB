@@ -44,6 +44,5 @@ def ensure_indexes():
     db.documents.create_index([("file_hash", ASCENDING)])
     db.documents.create_index([("file_name", ASCENDING)])
     db.documents.create_index([("status", ASCENDING)])
-    db.financial_facts.create_index([("entity_id", ASCENDING), ("item", ASCENDING)])
     db.sessions.create_index([("session_id", ASCENDING)], unique=True)
     db.messages.create_index([("session_id", ASCENDING), ("created_at", ASCENDING)])

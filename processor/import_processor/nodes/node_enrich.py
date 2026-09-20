@@ -1,48 +1,39 @@
 """
-节点：知识抽取。从已切分的文档中抽取结构化知识，只写 Mongo（放在入库之后，调整它不需要重新向量化）。
-- 财务指标事实：季报“主要会计数据和财务指标”一节的表格，用 table_html_utils 确定性解析（不经过 LLM），
-  每个“行 × 列”一条事实，写入 financial_facts；
-- 文档摘要：每份文档一次 LLM 调用（正文截断到 SUMMARY_INPUT_CHARS），写入 documents.summary。
+节点：知识抽取。把两类"不是正文、但值得被检索到"的内容也做成切片，追加进 chunks.json。
+- 财务指标事实：季报"主要会计数据和财务指标"一节的表格，用 table_html_utils 确定性解析（不经过 LLM），
+  同一行的各列合并成一条 "营业收入：本报告期=…；上年同期=…（单位）〔章节〕"，一条一个切片（kind=fact）；
+- 文档摘要：每份文档一次 LLM 调用（正文截断到 SUMMARY_INPUT_CHARS），做成一个切片（kind=summary）。
+上游 node_chunk 产出 chunks.json；下游 node_index 统一编码入库，所以这两类内容和正文走同一条检索路径。
 """
 from common.logging.logger import logger, node_log, step_log
-from utils.block_utils import get_last_page, read_blocks
+from processor.import_processor.nodes.node_chunk import new_chunk
 from processor.import_processor.state import ImportGraphState
-from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, read_json
-from utils.clients.mongo_utils import get_db
-from utils.entity_utils import get_entity_by_file
+from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, read_json, write_json
+from utils.block_utils import get_last_page, read_blocks
 from utils.lm.lm_utils import chat
 from utils.load_prompt import load_prompt
 from utils.table_html_utils import get_unit_hint, is_spanning_row, parse_table, row_columns, row_values
-from utils.task_utils import mark_ready
 
 COMPANY_REPORT = "公司定期报告"  # 只有这类文档抽取财务指标事实
 FACT_SECTION_KEYWORDS = ("主要会计数据",)
 SUMMARY_INPUT_CHARS = 6000
+SUMMARY_PREFIX = "（文档摘要）"
 
 
 # ---------- 财务指标事实 ----------
 
-def extract_facts(doc: dict, blocks: list) -> list:
+def extract_facts(blocks: list) -> list:
     """
-    从“主要会计数据”一节的表格抽取财务指标事实
-    :param doc: 文档记录（用到 doc_id、file_name）
+    从"主要会计数据"一节的表格抽取财务指标事实
     :param blocks: 版面块列表
-    :return: 事实 dict 列表，键：doc_id, entity_id, file_name, unit, section, page_start, page_end, item, column, value
+    :return: 事实 dict 列表，键：unit, section, page_start, page_end, item, column, value
     """
-    entity = get_entity_by_file(doc["file_name"])
-    if entity:
-        entity_id = entity["id"]
-    else:
-        entity_id = None
     facts = []
     for b in blocks:
         if not _is_fact_table(b):
             continue
         table = parse_table(b["table_html"] or "")
         base = {
-            "doc_id": doc["doc_id"],
-            "entity_id": entity_id,
-            "file_name": doc["file_name"],
             "unit": b["context"] or get_unit_hint(table),
             "section": " > ".join(b["section_path"]),
             "page_start": b["page"],
@@ -56,14 +47,18 @@ def extract_facts(doc: dict, blocks: list) -> list:
 
 
 def _is_fact_table(block: dict) -> bool:
-    """章节路径含“主要会计数据”的表格"""
+    """章节路径含"主要会计数据"的表格"""
     if block["type"] != "table":
         return False
     path = " > ".join(block["section_path"])
-    return any(k in path for k in FACT_SECTION_KEYWORDS)
+    for keyword in FACT_SECTION_KEYWORDS:
+        if keyword in path:
+            return True
+    return False
 
 
 def _new_fact(base: dict, item: str, column: str, value: str) -> dict:
+    """一条事实：行名 + 列名 + 值，带上单位、章节与页码"""
     fact = dict(base)
     fact["item"] = item
     fact["column"] = column
@@ -95,14 +90,45 @@ def _extract_row_facts(table: dict, base: dict) -> list:
     return facts
 
 
-@step_log("save_facts")
-def save_facts(doc: dict, facts: list):
-    """覆盖写入文档的财务指标事实（先删后插，重跑不产生重复）"""
-    db = get_db()
-    db.financial_facts.delete_many({"doc_id": doc["doc_id"]})
-    if facts:
-        db.financial_facts.insert_many(facts)
-    logger.info(f"enrich    {doc['file_name']}：财务指标事实 {len(facts)} 条")
+def group_facts(facts: list) -> list:
+    """
+    把一行一列的事实按 (章节, 起始页, 行名) 归拢：同一表格同一行的各列算一组
+    :return: [(base, rows)]，按首次出现顺序
+    """
+    groups = {}
+    order = []
+    for fact in facts:
+        key = (fact["section"], fact["page_start"], fact["item"])
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(fact)
+    return [(groups[key][0], groups[key]) for key in order]
+
+
+def build_fact_text(base: dict, rows: list) -> str:
+    """一组事实合并成一句：行名：列=值；…（单位）〔章节〕"""
+    cells = []
+    for row in rows:
+        if row["column"]:
+            cells.append(f"{row['column']}={row['value']}")
+        else:
+            cells.append(row["value"])
+    text = f"{base['item']}：{'；'.join(cells)}"
+    if base["unit"]:
+        text += f"（{base['unit']}）"
+    text += f"〔{base['section']}〕"
+    return text
+
+
+@step_log("build_fact_chunks")
+def build_fact_chunks(blocks: list) -> list:
+    """版面块 → 财务指标事实切片，一组一个切片"""
+    chunks = []
+    for base, rows in group_facts(extract_facts(blocks)):
+        text = build_fact_text(base, rows)
+        chunks.append(new_chunk("fact", text, text, base["section"], base["page_start"], base["page_end"]))
+    return chunks
 
 
 # ---------- 文档摘要 ----------
@@ -121,12 +147,13 @@ def build_summary_input(chunks: list) -> str:
     return "\n".join(parts)[:SUMMARY_INPUT_CHARS]
 
 
-@step_log("summarize")
-def summarize(doc: dict, chunks: list) -> str:
-    """调用 LLM 生成文档摘要"""
+@step_log("build_summary_chunk")
+def build_summary_chunk(doc: dict, chunks: list) -> dict:
+    """调用 LLM 生成文档摘要，做成一个切片；页码留 0，表示不指向具体某一页"""
     text = build_summary_input(chunks)
     prompt = load_prompt("doc_summary", title=doc["document_title"], content_type=doc["content_type"], text=text)
-    return chat([{"role": "user", "content": prompt}], max_tokens=1000).strip()
+    summary = chat([{"role": "user", "content": prompt}], max_tokens=1000).strip()
+    return new_chunk("summary", SUMMARY_PREFIX + summary, summary, "", 0, 0)
 
 
 # ---------- 节点 ----------
@@ -152,34 +179,40 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_enrich")
 def node_enrich(state: ImportGraphState):
     """
-    节点功能：公司定期报告抽取财务指标事实写入 financial_facts；每份文档生成摘要写入 documents.summary。
-    上游 node_index；导入图的最后一个节点，跑完文档状态变为 ready。
+    节点功能：把财务指标事实与文档摘要做成切片，追加进 chunks.json。
+    上游 node_chunk；下游 node_index 统一编码入库。
     """
     doc = validate_and_get_data(state)
-    summary = enrich_document(doc)
-    mark_ready(doc, {"summary": summary})
+    enrich_document(doc)
     return state
 
 
 @step_log("enrich_document")
-def enrich_document(doc: dict) -> str:
-    """抽取并保存财务指标事实（仅公司定期报告），返回文档摘要"""
+def enrich_document(doc: dict) -> int:
+    """抽取事实与摘要，追加进 chunks.json 并重排序号，返回追加的切片数"""
     doc_dir = get_doc_dir(doc["doc_id"])
-    if doc["content_type"] == COMPANY_REPORT:
-        blocks = read_blocks(doc_dir / BLOCKS)
-        save_facts(doc, extract_facts(doc, blocks))
     chunks = read_json(doc_dir / CHUNKS)
-    return summarize(doc, chunks)
+    # 重跑时先去掉上一次追加的，避免累积
+    chunks = [c for c in chunks if c["kind"] not in ("fact", "summary")]
+    extra = []
+    if doc["content_type"] == COMPANY_REPORT:
+        extra.extend(build_fact_chunks(read_blocks(doc_dir / BLOCKS)))
+    extra.append(build_summary_chunk(doc, chunks))
+    chunks.extend(extra)
+    for i, chunk in enumerate(chunks):
+        chunk["seq"] = i
+    write_json(doc_dir / CHUNKS, chunks)
+    logger.info(f"enrich    {doc['file_name']}：追加 {len(extra)} 个切片（事实 {len(extra) - 1}、摘要 1）")
+    return len(extra)
 
 
 if __name__ == "__main__":
-    # 运行：uv run python -m processor.import_processor.nodes.node_enrich <doc_id> <文件名>
-    # 只演示财务事实抽取：读 data/artifacts/<doc_id>/blocks.json 抽取后打印前 10 条（依赖 data/entities.json）。
-    # 不调用 LLM、不写 Mongo（节点本身会写 financial_facts 与文档摘要）
+    # 运行：uv run python -m processor.import_processor.nodes.node_enrich <doc_id>
+    # 只演示财务事实：读 data/artifacts/<doc_id>/blocks.json 抽取后打印前 5 个切片。
+    # 不调用 LLM、不写文件
     import sys
 
-    test_doc = {"doc_id": sys.argv[1], "file_name": sys.argv[2]}
-    test_facts = extract_facts(test_doc, read_blocks(get_doc_dir(test_doc["doc_id"]) / BLOCKS))
-    logger.info(f"财务指标事实 {len(test_facts)} 条")
-    for test_fact in test_facts[:10]:
-        print(test_fact["item"], "|", test_fact["column"], "|", test_fact["value"], "|", test_fact["unit"])
+    test_chunks = build_fact_chunks(read_blocks(get_doc_dir(sys.argv[1]) / BLOCKS))
+    logger.info(f"财务指标事实切片 {len(test_chunks)} 个")
+    for test_chunk in test_chunks[:5]:
+        print(test_chunk["page_start"], test_chunk["text"][:90])

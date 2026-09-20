@@ -21,7 +21,7 @@ from utils.clients.milvus_utils import (
 )
 from utils.clients.mongo_utils import get_db
 from utils.lm.embedding_utils import generate_embeddings
-from utils.task_utils import save_doc_fields
+from utils.task_utils import mark_ready
 
 
 def build_embed_text(doc: dict, chunk: dict) -> str:
@@ -143,13 +143,13 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_index")
 def node_index(state: ImportGraphState):
     """
-    节点功能：读取 chunks.json，编码成向量并写入 Milvus，记录 chunk_count。
-    上游 node_chunk，下游 node_enrich。
+    节点功能：读取 chunks.json（含 node_enrich 追加的事实与摘要），编码成向量写入 Milvus。
+    上游 node_enrich；导入图的最后一个节点，跑完文档状态变为 ready。
     切片与向量都是大对象，只在本节点内传递，不进状态。
     """
     doc, chunks = validate_and_get_data(state)
     count = import_to_milvus(doc, chunks, encode_chunks(doc, chunks))
-    save_doc_fields(doc, {"chunk_count": count})
+    mark_ready(doc, {"chunk_count": count})
     return state
 
 

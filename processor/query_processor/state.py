@@ -1,7 +1,7 @@
 """
 查询图的状态
 plan（查询计划，node_query_plan 产出）为 dict：standalone_query 补全指代后的独立问题、
-entity_mentions 问题里提到的对象、metrics 财务指标名。
+entity_mentions 问题里提到的对象。
 """
 import copy
 from typing import TypedDict

@@ -1,7 +1,7 @@
 """
 节点：查询改写
 读会话；上一轮在等澄清且本轮回复能匹配候选时，由代码直接确定对象（不调用 LLM）；
-否则一次 LLM 调用把问题补全成独立问题，并抽出提到的对象与财务指标（JSON，代码补默认值并校验）。
+否则一次 LLM 调用把问题补全成独立问题，并抽出提到的对象（JSON，代码补默认值并校验）。
 该不该回答、要不要拒答由 node_answer_output 里的模型判断，这里不做意图分类。
 """
 import json
@@ -111,11 +111,10 @@ def build_plan_messages(question: str, history: list, focus_names: list) -> list
 
 
 def build_default_plan(standalone_query: str) -> dict:
-    """默认计划：问题原样、没有对象、没有指标"""
+    """默认计划：问题原样、没有对象"""
     return {
         "standalone_query": standalone_query,
         "entity_mentions": [],
-        "metrics": [],
     }
 
 
@@ -152,7 +151,6 @@ def parse_plan(text: str) -> dict:
         raise ValueError(f"standalone_query 缺失或不是字符串：{standalone_query}")
     plan = build_default_plan(standalone_query)
     plan["entity_mentions"] = parse_str_list(data.get("entity_mentions", []), "entity_mentions")
-    plan["metrics"] = parse_str_list(data.get("metrics", []), "metrics")
     return plan
 
 
@@ -160,7 +158,7 @@ def parse_plan(text: str) -> dict:
 def plan_query(question: str, history: list, focus_names: list) -> dict:
     """
     调用 LLM 生成查询计划
-    :return: 计划 dict；模型输出无法解析或字段不合法时退回知识类检索（standalone_query 取原问题）
+    :return: 计划 dict；模型输出无法解析或字段不合法时退回原问题检索
     """
     messages = build_plan_messages(question, history, focus_names)
     try:
