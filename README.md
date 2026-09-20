@@ -10,8 +10,8 @@
 
 ```text
 导入图（一次处理一个文件，从头跑到尾；已就绪且内容未变的文件直接跳过）
-node_entry → node_parse → node_normalize → node_document_split → node_index → node_enrich
-  登记/去重    MinerU 解析   标题层级/表格/图片   正文按章节、表格独立   BGE-M3 稠密+稀疏，先写新版本再删旧版本   财务事实+文档摘要
+node_entry → node_parse → node_chunk → node_index → node_enrich
+  登记/去重    MinerU 解析   标题层级/表格/图片，正文按章节、表格独立   BGE-M3 稠密+稀疏，写入后清掉旧切片   财务事实+文档摘要
 
 查询图（提示词主导：怎么回答由模型按规则手册判断，代码只保留三道闸门）
 node_query_plan → node_gather_evidence → node_answer_output

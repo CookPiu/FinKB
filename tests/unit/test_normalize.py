@@ -1,4 +1,4 @@
-from processor.import_processor.nodes.node_normalize import HeadingStack, normalize, numbered_level
+from utils.block_utils import HeadingStack, normalize, numbered_level
 from utils.image_utils import image_size
 from utils.text_utils import clean_text, despace
 

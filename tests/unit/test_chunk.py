@@ -1,5 +1,5 @@
-from processor.import_processor.nodes.node_document_split import build_chunks, split_long_text
-from processor.import_processor.nodes.node_normalize import new_block
+from processor.import_processor.nodes.node_chunk import build_chunks, split_long_text
+from utils.block_utils import new_block
 
 MAOTAI = (
     "<table><tr><td>项目</td><td>本报告期</td><td>上年同期</td><td>本报告期比上年同期增减变动幅度(%)</td></tr>"

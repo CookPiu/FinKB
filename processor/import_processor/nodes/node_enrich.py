@@ -5,7 +5,7 @@
 - 文档摘要：每份文档一次 LLM 调用（正文截断到 SUMMARY_INPUT_CHARS），写入 documents.summary。
 """
 from common.logging.logger import logger, node_log, step_log
-from processor.import_processor.nodes.node_normalize import get_last_page, read_blocks
+from utils.block_utils import get_last_page, read_blocks
 from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, read_json
 from utils.clients.mongo_utils import get_db

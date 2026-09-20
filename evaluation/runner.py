@@ -23,7 +23,7 @@ from pathlib import Path
 from common.config.embedding_config import embedding_config
 from evaluation.dataset import load_corpus, load_eval_items, resolve_turns, self_check
 from evaluation.metrics import describe, file_hit_rank, first_hit_rank, is_hit, summarize
-from processor.import_processor.nodes.node_document_split import (
+from processor.import_processor.nodes.node_chunk import (
     CHUNK_MAX_CHARS,
     CHUNK_MIN_CHARS,
     CHUNK_TARGET_CHARS,

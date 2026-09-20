@@ -1,20 +1,22 @@
 """
-节点：文档切分。blocks.json → chunks.json。
+节点：切片。content_list.json → 版面块 → chunks.json。
+版面块的整理规则（丢页眉页码、推断标题层级、跨页合并、单位行并入、图片描述）在 utils/block_utils.py，
+本节点负责调用它并把版面块切成检索切片：
 - 正文按章节聚合：目标 CHUNK_TARGET_CHARS 字、上限 CHUNK_MAX_CHARS 字；缓冲不足 CHUNK_MIN_CHARS 字时跨小节继续累积，
   标题行保留在切片正文中；超长段落按句切分；
 - 表格独立成块：展示文本 = 标题/说明行 + Markdown 表格 + 表注；向量文本 = 说明 + 逐行线性化；
   线性化超过 TABLE_MAX_CHARS 字时按行拆分，每段重复表头；
 - 图片描述独立成块（kind=image_desc，derived=true）。
-每次切分产出一套新切片，文档版本号 +1（入库节点先写新版本、再删旧版本）。
 
 切片 chunk 是 dict，字段见 new_chunk；chunks.json 写出全部字段。
+中间的 blocks.json 仍会写出：node_enrich 从版面块里抽财务事实，调试时也用得上。
 """
 import re
 
 from common.logging.logger import logger, node_log, step_log
-from processor.import_processor.nodes.node_normalize import get_last_page, read_blocks
 from processor.import_processor.state import ImportGraphState
-from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, write_json
+from utils.artifact_utils import CHUNKS, CONTENT_LIST, get_doc_dir, write_json
+from utils.block_utils import get_last_page, normalize_document
 from utils.table_html_utils import get_unit_hint, linearize_rows, parse_table, split_rows, to_markdown
 from utils.task_utils import save_doc_fields
 
@@ -224,49 +226,50 @@ def build_chunks(blocks: list, target: int, max_chars: int, min_chars: int, tabl
 @step_log("validate_and_get_data")
 def validate_and_get_data(state: ImportGraphState):
     """
-    取出并校验切分所需的入参
+    取出并校验切片所需的入参
     :return: 文档记录
-    :raise ValueError: 状态里没有文档记录，或规范化产物不存在
+    :raise ValueError: 状态里没有文档记录，或解析产物不存在
     """
     doc = state.get("doc")
     if not doc:
         logger.error("no doc found in state")
         raise ValueError("no doc found in state")
-    blocks_path = get_doc_dir(doc["doc_id"]) / BLOCKS
-    if not blocks_path.is_file():
-        logger.error(f"blocks.json not found: {blocks_path}")
-        raise ValueError(f"blocks.json not found: {blocks_path}")
+    content_list_path = get_doc_dir(doc["doc_id"]) / CONTENT_LIST
+    if not content_list_path.is_file():
+        logger.error(f"content_list.json not found: {content_list_path}")
+        raise ValueError(f"content_list.json not found: {content_list_path}")
     return doc
 
 
-@node_log("node_document_split")
-def node_document_split(state: ImportGraphState):
+@node_log("node_chunk")
+def node_chunk(state: ImportGraphState):
     """
-    节点功能：把版面块 blocks.json 切成检索切片 chunks.json，并把文档版本号 +1。
-    上游 node_normalize；下游 node_index 读取 chunks.json 计算向量并写入 Milvus。
+    节点功能：把解析结果整理成版面块，再切成检索切片 chunks.json，记录切片数。
+    上游 node_parse 产出 content_list.json；下游 node_index 读取 chunks.json 计算向量并写入 Milvus。
     """
     doc = validate_and_get_data(state)
-    chunk_count = split_document(doc["doc_id"])
-    # 每次切分产出一套新切片，版本号 +1；入库节点按新版本写入后删除旧版本
+    chunk_count = chunk_document(doc["doc_id"])
     save_doc_fields(doc, {"chunk_count": chunk_count})
     return state
 
 
-@step_log("split_document")
-def split_document(doc_id: str) -> int:
-    """切分一个文档：读 blocks.json，写 chunks.json，返回切片数"""
-    doc_dir = get_doc_dir(doc_id)
-    blocks = read_blocks(doc_dir / BLOCKS)
+@step_log("chunk_document")
+def chunk_document(doc_id: str) -> int:
+    """切一个文档：content_list.json → 版面块（同时写出 blocks.json）→ chunks.json，返回切片数"""
+    blocks = normalize_document(doc_id)
     chunks = build_chunks(blocks, CHUNK_TARGET_CHARS, CHUNK_MAX_CHARS, CHUNK_MIN_CHARS, TABLE_MAX_CHARS)
-    write_json(doc_dir / CHUNKS, chunks)
+    write_json(get_doc_dir(doc_id) / CHUNKS, chunks)
     return len(chunks)
 
 
 if __name__ == "__main__":
-    # 运行：uv run python -m processor.import_processor.nodes.node_document_split <doc_id>
-    # 只演示纯函数部分：读 data/artifacts/<doc_id>/blocks.json 切分后打印前 5 个切片。
-    # 不写文件、不连 Mongo（节点本身会写 Mongo 进度与版本号）
+    # 运行：uv run python -m processor.import_processor.nodes.node_chunk <doc_id>
+    # 只演示切片部分：读 data/artifacts/<doc_id>/blocks.json 切分后打印前 5 个切片。
+    # 不调用视觉模型、不写文件、不连 Mongo
     import sys
+
+    from utils.artifact_utils import BLOCKS
+    from utils.block_utils import read_blocks
 
     test_blocks = read_blocks(get_doc_dir(sys.argv[1]) / BLOCKS)
     test_chunks = build_chunks(test_blocks, CHUNK_TARGET_CHARS, CHUNK_MAX_CHARS, CHUNK_MIN_CHARS, TABLE_MAX_CHARS)

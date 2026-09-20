@@ -1,5 +1,5 @@
 """
-节点：规范化。content_list.json → blocks.json。
+版面块：把 MinerU 的解析结果 content_list.json 整理成结构清楚的块，写出 blocks.json。
 - 丢弃页眉、页脚、页码；清洗文本中的 HTML 标签、Markdown 粗体与链接（utils/text_utils.py）；
 - MinerU 的标题层级基本是扁平的（除文档标题外都是 2 级），按编号样式推断层级并重建章节路径；
 - 跨页断开的段落拼回一段；
@@ -7,14 +7,13 @@
   表格上方的“单位：元 币种：人民币”一类说明行并入表格；
 - 图片与图表交给视觉模型描述（结果缓存在 image_desc.json），标记 derived=true。
 
-版面块 block 是 dict，字段见 new_block。blocks.json 写出时省略取默认值的字段，读取时用 read_blocks 补齐；
-下游 node_document_split、node_enrich 也用本模块的 read_blocks / get_last_page 读取版面块。
+版面块 block 是 dict，字段见 new_block。blocks.json 写出时省略取默认值的字段，读取时用 read_blocks 补齐。
+调用方：node_chunk（切片）与 node_enrich（抽财务事实）。
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from common.logging.logger import logger, node_log, step_log
-from processor.import_processor.state import ImportGraphState
+from common.logging.logger import logger, step_log
 from utils.artifact_utils import BLOCKS, CONTENT_LIST, IMAGE_DESC, get_doc_dir, read_json, write_json
 from utils.image_utils import image_size
 from utils.lm.lm_utils import describe_image
@@ -417,39 +416,8 @@ def describe_images(blocks: list, base, cache_path):
                 b["text"] = desc
 
 
-# ---------- 节点 ----------
-
-@step_log("validate_and_get_data")
-def validate_and_get_data(state: ImportGraphState):
-    """
-    取出并校验规范化所需的入参
-    :return: 文档记录
-    :raise ValueError: 状态里没有文档记录，或解析产物不存在
-    """
-    doc = state.get("doc")
-    if not doc:
-        logger.error("no doc found in state")
-        raise ValueError("no doc found in state")
-    content_list_path = get_doc_dir(doc["doc_id"]) / CONTENT_LIST
-    if not content_list_path.is_file():
-        logger.error(f"content_list.json not found: {content_list_path}")
-        raise ValueError(f"content_list.json not found: {content_list_path}")
-    return doc
-
-
-@node_log("node_normalize")
-def node_normalize(state: ImportGraphState):
-    """
-    节点功能：把解析结果 content_list.json 规范化为版面块 blocks.json。
-    上游 node_parse 产出 content_list.json；下游 node_document_split 读取 blocks.json 切片。
-    """
-    doc = validate_and_get_data(state)
-    normalize_document(doc["doc_id"])
-    return state
-
-
 @step_log("normalize_document")
-def normalize_document(doc_id: str):
+def normalize_document(doc_id: str) -> list:
     """规范化一个文档：content_list.json → 版面块 → 图片描述 → 丢弃没有描述的图片 → blocks.json"""
     doc_dir = get_doc_dir(doc_id)
     blocks = normalize(read_json(doc_dir / CONTENT_LIST))
@@ -458,12 +426,13 @@ def normalize_document(doc_id: str):
     for i, b in enumerate(blocks):
         b["seq"] = i
     write_json(doc_dir / BLOCKS, dump_blocks(blocks))
+    return blocks
 
 
 if __name__ == "__main__":
-    # 运行：uv run python -m processor.import_processor.nodes.node_normalize <doc_id>
-    # 只演示纯函数部分：读 data/artifacts/<doc_id>/content_list.json 规范化后打印前 10 块。
-    # 不调用视觉模型、不写文件、不连 Mongo（节点本身会写 Mongo 进度，需先由 node_entry 登记文档）
+    # 运行：uv run python -m utils.block_utils <doc_id>
+    # 只跑纯函数部分：读 data/artifacts/<doc_id>/content_list.json 规范化后打印前 10 块，
+    # 不调用视觉模型、不写文件
     import sys
 
     test_blocks = normalize(read_json(get_doc_dir(sys.argv[1]) / CONTENT_LIST))

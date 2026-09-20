@@ -144,7 +144,7 @@ def validate_and_get_data(state: ImportGraphState):
 def node_index(state: ImportGraphState):
     """
     节点功能：读取 chunks.json，编码成向量并写入 Milvus，记录 chunk_count。
-    上游 node_document_split，下游 node_enrich。
+    上游 node_chunk，下游 node_enrich。
     切片与向量都是大对象，只在本节点内传递，不进状态。
     """
     doc, chunks = validate_and_get_data(state)

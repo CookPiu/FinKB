@@ -92,7 +92,7 @@ def validate_and_get_data(state: ImportGraphState):
 def node_parse(state: ImportGraphState):
     """
     节点功能：把原件解析成 content_list.json，记录页数。
-    上游 node_entry，下游 node_normalize；解析结果按文件哈希缓存，内容没变时不会重复调用 MinerU。
+    上游 node_entry，下游 node_chunk；解析结果按文件哈希缓存，内容没变时不会重复调用 MinerU。
     """
     doc, reparse = validate_and_get_data(state)
     page_count = parse_document(doc, reparse)
