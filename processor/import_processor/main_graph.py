@@ -2,9 +2,9 @@
 导入图（LangGraph）：一次执行处理一个文件。
 node_entry → node_parse → node_normalize → node_document_split → node_bge_embedding → node_import_milvus → node_enrich
 
-每个节点开始前用 utils/task_utils.is_stage_done 检查 documents.stage：已完成的阶段直接跳过，因此中断后重跑即从断点续跑；
-同哈希且已就绪的文件在 node_entry 判定为 skip，直接结束。
-某个节点失败时标记文档 failed 并抛出，图终止；import_directory 捕获后继续处理下一个文件。
+一次导入从头跑到尾：同哈希且已就绪的文件在 node_entry 判定为 skip 直接结束，其余整条流水线重做
+（解析结果按文件哈希缓存在 data/artifacts，重做不会重复调用 MinerU）。
+某个节点抛异常时，import_file 把该文档标记为 failed 并继续抛出；import_directory 捕获后处理下一个文件。
 """
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,13 +15,13 @@ from common.logging.logger import logger
 from processor.import_processor.nodes.node_bge_embedding import node_bge_embedding
 from processor.import_processor.nodes.node_document_split import node_document_split
 from processor.import_processor.nodes.node_enrich import node_enrich
-from processor.import_processor.nodes.node_entry import ACTION_SKIP, node_entry
+from processor.import_processor.nodes.node_entry import ACTION_SKIP, build_doc_id, get_file_sha256, node_entry
 from processor.import_processor.nodes.node_import_milvus import node_import_milvus
 from processor.import_processor.nodes.node_normalize import node_normalize
 from processor.import_processor.nodes.node_parse import node_parse
 from processor.import_processor.state import ImportGraphState, create_default_state
 from utils.clients.mongo_utils import ensure_indexes
-from utils.task_utils import STATUS_READY, scan_files
+from utils.task_utils import STATUS_READY, mark_failed, scan_files
 
 # 1. 注册节点
 workflow = StateGraph(ImportGraphState)
@@ -65,7 +65,7 @@ def import_file(path: Path, root=None, task_id: str = "", force: bool = False, r
     导入单个文件
     :param path: 文件路径
     :param root: 导入目录（计算相对目录、判定内容类型），默认为文件所在目录
-    :return: 图的最终状态；失败时抛出异常（文档状态已标记为 failed）
+    :return: 图的最终状态；失败时把文档标记为 failed 后抛出异常
     """
     if not task_id:
         task_id = new_task_id()
@@ -78,7 +78,12 @@ def import_file(path: Path, root=None, task_id: str = "", force: bool = False, r
         force=force,
         reparse=reparse,
     )
-    return kb_import_app.invoke(state)
+    try:
+        return kb_import_app.invoke(state)
+    except Exception as e:
+        # 节点内不做失败处理，统一在这里记进 documents.error；doc_id 由文件内容决定，重算一次即可
+        mark_failed(build_doc_id(get_file_sha256(path)), path.name, e)
+        raise
 
 
 def list_import_files(root: Path, only=None) -> list:

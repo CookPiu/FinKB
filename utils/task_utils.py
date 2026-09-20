@@ -1,6 +1,6 @@
 """
-导入进度：每个文档的进度记在 Mongo documents 集合的 stage（最后完成的阶段）与 status 字段。
-节点开始前先用 is_stage_done 判断：已完成就跳过（断点续跑）；失败时标记 failed 后抛出，图终止，只影响这一个文件。
+导入进度：documents.status 记录文档当前的导入结果，失败原因写进 documents.error。
+一次导入从头跑到尾，中途失败的文档下次重跑整条流水线（解析结果按文件哈希缓存在 data/artifacts，不会重复调用 MinerU）。
 """
 from datetime import datetime, timezone
 
@@ -10,20 +10,10 @@ from utils.clients.mongo_utils import get_db
 # 支持导入的文件类型
 INGEST_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".md"}
 
-# 流水线阶段，按执行顺序排列。enrich 放在 index 之后：它只写 Mongo（财务事实、摘要），调整它不需要重新向量化
-STAGE_REGISTER = "register"
-STAGE_PARSE = "parse"
-STAGE_NORMALIZE = "normalize"
-STAGE_CHUNK = "chunk"
-STAGE_INDEX = "index"
-STAGE_ENRICH = "enrich"
-STAGE_ORDER = [STAGE_REGISTER, STAGE_PARSE, STAGE_NORMALIZE, STAGE_CHUNK, STAGE_INDEX, STAGE_ENRICH]
-
 # 文档状态
-STATUS_PENDING = "pending"  # 等待下一阶段
-STATUS_RUNNING = "running"
-STATUS_FAILED = "failed"
-STATUS_READY = "ready"  # 全部阶段完成
+STATUS_RUNNING = "running"  # 正在导入
+STATUS_FAILED = "failed"  # 导入失败，原因见 error
+STATUS_READY = "ready"  # 导入完成，可被检索
 STATUS_SUPERSEDED = "superseded"  # 同名文件内容变化后被新文档替换
 
 
@@ -44,54 +34,33 @@ def scan_files(root):
     return files
 
 
-def is_stage_done(doc: dict, stage: str) -> bool:
-    """文档是否已完成 stage 阶段（最后完成的阶段不早于 stage）"""
-    done_stage = doc.get("stage")
-    if not done_stage:
-        return False
-    return STAGE_ORDER.index(done_stage) >= STAGE_ORDER.index(stage)
-
-
-def save_doc_progress(doc: dict, fields=None):
-    """把进度字段（及阶段产出的字段）写回 Mongo"""
+def save_doc_fields(doc: dict, fields: dict):
+    """把节点产出的字段写回内存中的文档与 Mongo"""
+    doc.update(fields)
     doc["updated_at"] = datetime.now(timezone.utc)
-    update = {
-        "stage": doc.get("stage"),
-        "status": doc.get("status"),
-        "error": doc.get("error"),
-        "updated_at": doc["updated_at"],
-    }
-    if fields:
-        update.update(fields)
+    update = dict(fields)
+    update["updated_at"] = doc["updated_at"]
     get_db().documents.update_one({"_id": doc["doc_id"]}, {"$set": update})
 
 
-def mark_stage_running(doc: dict):
-    doc["status"] = STATUS_RUNNING
-    save_doc_progress(doc)
+def mark_running(doc: dict):
+    save_doc_fields(doc, {"status": STATUS_RUNNING, "error": None})
 
 
-def mark_stage_done(doc: dict, stage: str, fields=None):
-    """
-    标记阶段完成：最后一个阶段完成后文档就绪，否则等待下一阶段
-    :param fields: 本阶段产出、要一并写回文档的字段，如 {"page_count": 12}
-    """
-    doc["stage"] = stage
-    if stage == STAGE_ORDER[-1]:
-        doc["status"] = STATUS_READY
-    else:
-        doc["status"] = STATUS_PENDING
-    doc["error"] = None
-    if fields:
-        doc.update(fields)
-    save_doc_progress(doc, fields)
+def mark_ready(doc: dict, fields=None):
+    """整条流水线跑完：文档就绪；fields 为最后一个节点产出的字段"""
+    update = dict(fields or {})
+    update["status"] = STATUS_READY
+    update["error"] = None
+    save_doc_fields(doc, update)
 
 
-def mark_stage_failed(doc: dict, stage: str, error):
-    """标记失败并记录原因；异常堆栈只在 DEBUG 级别输出"""
+def mark_failed(doc_id: str, file_name: str, error):
+    """某个节点抛异常时由 import_file 统一标记，只影响这一个文档"""
     if isinstance(error, BaseException):
         logger.debug("失败详情", exc_info=error)
-    doc["status"] = STATUS_FAILED
-    doc["error"] = f"[{stage}] {error}"
-    save_doc_progress(doc)
-    logger.error(f"{doc['file_name']} 在 {stage} 阶段失败：{error}")
+    get_db().documents.update_one(
+        {"_id": doc_id},
+        {"$set": {"status": STATUS_FAILED, "error": str(error), "updated_at": datetime.now(timezone.utc)}},
+    )
+    logger.error(f"{file_name} 导入失败：{error}")

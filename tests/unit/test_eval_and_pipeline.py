@@ -2,37 +2,26 @@ from evaluation.dataset import build_eval_item, norm, resolve_turns, self_check
 from evaluation.metrics import file_hit_rank, first_hit_rank, summarize
 from processor.import_processor.nodes.node_entry import build_doc_id
 from utils.classify_utils import guess_content_type, title_from_filename
-from utils.task_utils import (
-    STAGE_CHUNK,
-    STAGE_ENRICH,
-    STAGE_INDEX,
-    STAGE_ORDER,
-    STAGE_PARSE,
-    STAGE_REGISTER,
-    is_stage_done,
-)
+from utils.task_utils import INGEST_EXTS, scan_files
 
 
 def make_hit(file_name, text):
     return {"file_name": file_name, "text": text}
 
 
-def test_stage_order():
-    assert STAGE_ORDER == ["register", "parse", "normalize", "chunk", "index", "enrich"]
-    # 还没有完成任何阶段：从 register 开始
-    assert not is_stage_done({"stage": None}, STAGE_REGISTER)
-    # 完成 register 后下一步是 parse
-    assert is_stage_done({"stage": STAGE_REGISTER}, STAGE_REGISTER)
-    assert not is_stage_done({"stage": STAGE_REGISTER}, STAGE_PARSE)
-    # 完成 chunk 后下一步是 index
-    assert is_stage_done({"stage": "chunk"}, STAGE_CHUNK)
-    assert not is_stage_done({"stage": "chunk"}, STAGE_INDEX)
-    # 完成 index 后下一步是 enrich
-    assert is_stage_done({"stage": STAGE_INDEX}, STAGE_INDEX)
-    assert not is_stage_done({"stage": STAGE_INDEX}, STAGE_ENRICH)
-    # 完成 enrich 后全部完成
-    for stage in STAGE_ORDER:
-        assert is_stage_done({"stage": STAGE_ENRICH}, stage)
+def test_scan_files_picks_supported_files(tmp_path):
+    (tmp_path / "b.pdf").write_text("x", encoding="utf-8")
+    (tmp_path / "a.md").write_text("x", encoding="utf-8")
+    (tmp_path / "note.txt").write_text("x", encoding="utf-8")  # 不支持的格式
+    (tmp_path / "~$tmp.docx").write_text("x", encoding="utf-8")  # Office 临时文件
+    (tmp_path / ".hidden.pdf").write_text("x", encoding="utf-8")  # 隐藏文件
+    sub = tmp_path / "子目录"
+    sub.mkdir()
+    (sub / "c.docx").write_text("x", encoding="utf-8")
+
+    names = [p.name for p in scan_files(tmp_path)]
+    assert names == ["a.md", "b.pdf", "c.docx"]  # 递归、按路径排序
+    assert ".txt" not in INGEST_EXTS
 
 
 def test_doc_id_is_deterministic_prefix():

@@ -1,4 +1,4 @@
-"""节点：入口（register）。计算哈希、判定新增 / 续跑 / 跳过、原件上传 MinIO、写 documents 记录。"""
+"""节点：入口（register）。计算哈希、判定新增 / 重做 / 跳过、原件上传 MinIO、写 documents 记录。"""
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,18 +9,17 @@ from utils.artifact_utils import get_doc_dir
 from utils.classify_utils import CONTENT_TYPE_OTHER, guess_content_type, title_from_filename
 from utils.clients.minio_utils import upload_file
 from utils.clients.mongo_utils import get_db
-from utils.task_utils import STAGE_ORDER, STAGE_REGISTER, STATUS_PENDING, STATUS_READY, STATUS_SUPERSEDED
+from utils.task_utils import STATUS_READY, STATUS_RUNNING, STATUS_SUPERSEDED
 
 # 登记结果
 ACTION_NEW = "new"  # 首次导入
-ACTION_RESUME = "resume"  # 上次未完成，从断点继续
-ACTION_FORCE = "force"  # 已就绪但要求从头重建
+ACTION_REDO = "redo"  # 库里已有记录但没就绪，或指定了 --force：整条流水线重做
 ACTION_SKIP = "skip"  # 同哈希已就绪，跳过
 
 # documents 记录的全部字段（_id 即 doc_id），按写入顺序排列
 DOC_FIELDS = [
     "_id", "doc_id", "file_name", "file_ext", "file_hash", "file_size", "rel_dir", "local_path", "source_path",
-    "content_type", "content_type_source", "document_title", "version", "stage", "status", "error",
+    "content_type", "content_type_source", "document_title", "version", "status", "error",
     "artifacts_dir", "page_count", "chunk_count", "supersedes", "institution_name", "publish_date",
     "report_period", "entity_ids", "summary", "created_at", "updated_at",
 ]
@@ -31,14 +30,13 @@ DOC_DEFAULTS = {
     "source_path": "",
     "content_type": CONTENT_TYPE_OTHER,
     "content_type_source": "dir_rule",
-    "version": 0,  # 切片版本：chunk 阶段每次产出新切片集时 +1；index 先写新版本再删旧版本
-    "stage": None,  # 最后完成的阶段
-    "status": STATUS_PENDING,
+    "version": 0,  # 切片版本：切分节点每次产出新切片集时 +1；入库节点先写新版本再删旧版本
+    "status": STATUS_RUNNING,
     "error": None,
     "page_count": None,
     "chunk_count": None,
     "supersedes": [],
-    # 以下字段由 enrich 阶段填充
+    # 以下字段由 node_enrich 填充
     "institution_name": None,
     "publish_date": None,
     "report_period": None,
@@ -115,8 +113,7 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "content_type_source": "dir_rule",
         "document_title": title_from_filename(path.stem),
         "version": 0,
-        "stage": STAGE_REGISTER,
-        "status": STATUS_PENDING,
+        "status": STATUS_RUNNING,
         "error": None,
         "artifacts_dir": str(get_doc_dir(doc_id)),
         "page_count": None,
@@ -135,7 +132,7 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
 def register_document(path: Path, root: Path, force: bool = False):
     """
     登记文件，判定本次要做的动作
-    :return: (文档记录, 动作 new / resume / force / skip)
+    :return: (文档记录, 动作 new / redo / skip)
     """
     db = get_db()
     file_hash = get_file_sha256(path)
@@ -144,22 +141,20 @@ def register_document(path: Path, root: Path, force: bool = False):
 
     existing = load_document(doc_id)
     if existing is not None:
-        # 流水线新增了阶段时，旧的“就绪”文档只补跑新阶段
-        complete = existing["status"] == STATUS_READY and existing["stage"] == STAGE_ORDER[-1]
-        if complete and not force:
+        # 内容没变又已经就绪：无需再做（--force 时仍重做一遍）
+        if existing["status"] == STATUS_READY and not force:
             return existing, ACTION_SKIP
-        if force and existing["status"] == STATUS_READY:
-            # 版本号由切分节点递增（每产生一套新切片即一个新版本）
-            existing["stage"] = STAGE_REGISTER
-            existing["status"] = STATUS_PENDING
-            existing["error"] = None
-            existing["updated_at"] = now
-            db.documents.replace_one({"_id": doc_id}, to_mongo(existing))
-            return existing, ACTION_FORCE
-        # 未完成：文件路径可能变化，刷新本地路径后从断点继续
+        # 上次失败或要求重建：整条流水线从头再跑一次；版本号由切分节点递增
         existing["local_path"] = str(path)
-        db.documents.update_one({"_id": doc_id}, {"$set": {"local_path": str(path), "updated_at": now}})
-        return existing, ACTION_RESUME
+        existing["status"] = STATUS_RUNNING
+        existing["error"] = None
+        existing["updated_at"] = now
+        db.documents.update_one(
+            {"_id": doc_id},
+            {"$set": {"local_path": str(path), "status": STATUS_RUNNING, "error": None, "updated_at": now},
+             "$unset": {"stage": ""}},  # 旧版本记过阶段，这里顺手清掉
+        )
+        return existing, ACTION_REDO
 
     doc = build_new_document(path, root, file_hash, now)
     db.documents.insert_one(to_mongo(doc))
@@ -172,8 +167,8 @@ def register_document(path: Path, root: Path, force: bool = False):
 def node_entry(state: ImportGraphState):
     """
     节点功能：登记待导入文件，决定后续流程。
-    同哈希且已就绪 → skip（路由直接结束）；未完成 → resume（后续节点按 documents.stage 跳过已完成阶段）；
-    --force 且已就绪 → force（阶段重置为 register）；新文件 → new（上传原件、写入 documents 记录）。
+    同哈希且已就绪 → skip（路由直接结束）；上次失败或指定 --force → redo（整条流水线重做）；
+    新文件 → new（上传原件、写入 documents 记录）。
     """
     path = Path(state["local_file_path"])
     root = Path(state.get("root_dir") or path.parent)
@@ -192,4 +187,4 @@ if __name__ == "__main__":
     import sys
 
     result = node_entry(create_default_state(local_file_path=sys.argv[1]))
-    logger.info(f"action={result['action']} doc_id={result['doc']['doc_id']} stage={result['doc']['stage']}")
+    logger.info(f"action={result['action']} doc_id={result['doc']['doc_id']} status={result['doc']['status']}")

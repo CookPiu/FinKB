@@ -15,14 +15,7 @@ from utils.clients.milvus_utils import (
     upsert_rows,
 )
 from utils.clients.mongo_utils import get_db
-from utils.task_utils import (
-    STAGE_INDEX,
-    STATUS_SUPERSEDED,
-    is_stage_done,
-    mark_stage_done,
-    mark_stage_failed,
-    mark_stage_running,
-)
+from utils.task_utils import STATUS_SUPERSEDED, save_doc_fields
 
 
 def build_chunk_id(doc: dict, seq: int) -> str:
@@ -105,22 +98,14 @@ def import_to_milvus(doc: dict, chunks: list, vectors: list) -> int:
 def node_import_milvus(state: ImportGraphState):
     """
     节点功能：把切片与向量写入 Milvus，记录 chunk_count。
-    上游 node_bge_embedding，下游 node_enrich；index 阶段已完成则跳过。
+    上游 node_bge_embedding，下游 node_enrich。
     结束后清空状态里的切片与向量（体积大，后续节点不需要）。
     """
     doc = state["doc"]
     chunks = state.get("chunks") or []
     vectors = state.get("embeddings_content") or []
-    if is_stage_done(doc, STAGE_INDEX):
-        logger.info(f"index     跳过（已完成） {doc['file_name']}")
-    else:
-        mark_stage_running(doc)
-        try:
-            count = import_to_milvus(doc, chunks, vectors)
-        except Exception as e:
-            mark_stage_failed(doc, STAGE_INDEX, e)
-            raise
-        mark_stage_done(doc, STAGE_INDEX, {"chunk_count": count})
+    count = import_to_milvus(doc, chunks, vectors)
+    save_doc_fields(doc, {"chunk_count": count})
     state["chunks"] = []
     state["embeddings_content"] = []
     return state

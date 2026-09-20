@@ -50,7 +50,7 @@ async def upload_documents(background_tasks: BackgroundTasks, files: list[Upload
 
 @app.get("/documents", summary="文档与导入状态")
 def list_documents():
-    fields = {"_id": 1, "file_name": 1, "content_type": 1, "status": 1, "stage": 1, "chunk_count": 1,
+    fields = {"_id": 1, "file_name": 1, "content_type": 1, "status": 1, "chunk_count": 1,
               "page_count": 1, "error": 1, "source_path": 1, "updated_at": 1}
     docs = get_db().documents.find({"status": {"$ne": "superseded"}}, fields).sort("file_name", 1)
     documents = []

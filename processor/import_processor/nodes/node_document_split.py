@@ -16,7 +16,7 @@ from processor.import_processor.nodes.node_normalize import get_last_page, read_
 from processor.import_processor.state import ImportGraphState
 from utils.artifact_utils import BLOCKS, CHUNKS, get_doc_dir, write_json
 from utils.table_html_utils import get_unit_hint, linearize_rows, parse_table, split_rows, to_markdown
-from utils.task_utils import STAGE_CHUNK, is_stage_done, mark_stage_done, mark_stage_failed, mark_stage_running
+from utils.task_utils import save_doc_fields
 
 # 切分参数（评测结果里会记录）
 CHUNK_TARGET_CHARS = 600  # 正文切片目标长度，缓冲累积到该长度即断开
@@ -226,20 +226,11 @@ def node_document_split(state: ImportGraphState):
     """
     节点功能：把版面块 blocks.json 切成检索切片 chunks.json，并把文档版本号 +1。
     上游 node_normalize；下游 node_bge_embedding 读取 chunks.json 计算向量。
-    已完成本阶段的文档直接跳过（断点续跑）；失败时标记 failed 后抛出。
     """
     doc = state["doc"]
-    if is_stage_done(doc, STAGE_CHUNK):
-        logger.info(f"chunk     跳过（已完成） {doc['file_name']}")
-        return state
-    mark_stage_running(doc)
-    try:
-        chunk_count = split_document(doc["doc_id"])
-    except Exception as e:
-        mark_stage_failed(doc, STAGE_CHUNK, e)
-        raise
+    chunk_count = split_document(doc["doc_id"])
     # 每次切分产出一套新切片，版本号 +1；入库节点按新版本写入后删除旧版本
-    mark_stage_done(doc, STAGE_CHUNK, {"chunk_count": chunk_count, "version": doc["version"] + 1})
+    save_doc_fields(doc, {"chunk_count": chunk_count, "version": doc["version"] + 1})
     return state
 
 

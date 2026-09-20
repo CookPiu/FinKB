@@ -13,7 +13,7 @@ from utils.entity_utils import get_entity_by_file
 from utils.lm.lm_utils import chat
 from utils.load_prompt import load_prompt
 from utils.table_html_utils import get_unit_hint, is_spanning_row, parse_table, row_columns, row_values
-from utils.task_utils import STAGE_ENRICH, is_stage_done, mark_stage_done, mark_stage_failed, mark_stage_running
+from utils.task_utils import mark_ready
 
 COMPANY_REPORT = "公司定期报告"  # 只有这类文档抽取财务指标事实
 FACT_SECTION_KEYWORDS = ("主要会计数据",)
@@ -133,20 +133,11 @@ def summarize(doc: dict, chunks: list) -> str:
 def node_enrich(state: ImportGraphState):
     """
     节点功能：公司定期报告抽取财务指标事实写入 financial_facts；每份文档生成摘要写入 documents.summary。
-    上游 node_import_milvus；导入图的最后一个节点，本阶段完成后文档状态为 ready。
-    已完成本阶段的文档直接跳过（断点续跑）；失败时标记 failed 后抛出。
+    上游 node_import_milvus；导入图的最后一个节点，跑完文档状态变为 ready。
     """
     doc = state["doc"]
-    if is_stage_done(doc, STAGE_ENRICH):
-        logger.info(f"enrich    跳过（已完成） {doc['file_name']}")
-        return state
-    mark_stage_running(doc)
-    try:
-        summary = enrich_document(doc)
-    except Exception as e:
-        mark_stage_failed(doc, STAGE_ENRICH, e)
-        raise
-    mark_stage_done(doc, STAGE_ENRICH, {"summary": summary})
+    summary = enrich_document(doc)
+    mark_ready(doc, {"summary": summary})
     return state
 
 

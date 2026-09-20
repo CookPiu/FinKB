@@ -128,13 +128,13 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     from utils.clients.mongo_utils import get_db
 
-    fields = {"file_name": 1, "status": 1, "stage": 1, "version": 1, "page_count": 1, "chunk_count": 1, "error": 1}
+    fields = {"file_name": 1, "status": 1, "version": 1, "page_count": 1, "chunk_count": 1, "error": 1}
     rows = list(get_db().documents.find({}, fields).sort("file_name", 1))
     counts = {}
     for row in rows:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
         print(
-            f"{row['_id']}  {row['status']:<10} {str(row.get('stage')):<9} v{row.get('version')} "
+            f"{row['_id']}  {row['status']:<10} v{row.get('version')} "
             f"p={row.get('page_count')} c={row.get('chunk_count')}  {row['file_name']}"
         )
         if row.get("error"):
@@ -212,7 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--models", action="store_true", help="同时加载 BGE-M3 并编码一次")
     p.set_defaults(func=cmd_check)
 
-    p = sub.add_parser("ingest", help="导入目录（可重复执行：续跑未完成文档、跳过未变化文档）")
+    p = sub.add_parser("ingest", help="导入目录（可重复执行：已就绪且内容未变的文件跳过，其余重做）")
     p.add_argument("dir")
     p.add_argument("--force", action="store_true", help="已就绪文档也从头重建（解析缓存仍然有效）")
     p.add_argument("--reparse", action="store_true", help="忽略解析缓存，重新调用 MinerU")

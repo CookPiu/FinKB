@@ -19,7 +19,6 @@ from utils.artifact_utils import BLOCKS, CONTENT_LIST, IMAGE_DESC, get_doc_dir, 
 from utils.image_utils import image_size
 from utils.lm.lm_utils import describe_image
 from utils.table_html_utils import merge_html, parse_table
-from utils.task_utils import STAGE_NORMALIZE, is_stage_done, mark_stage_done, mark_stage_failed, mark_stage_running
 from utils.text_utils import clean_text
 
 DROP_TYPES = {"header", "footer", "page_number"}
@@ -425,19 +424,8 @@ def node_normalize(state: ImportGraphState):
     """
     节点功能：把解析结果 content_list.json 规范化为版面块 blocks.json。
     上游 node_parse 产出 content_list.json；下游 node_document_split 读取 blocks.json 切片。
-    已完成本阶段的文档直接跳过（断点续跑）；失败时标记 failed 后抛出。
     """
-    doc = state["doc"]
-    if is_stage_done(doc, STAGE_NORMALIZE):
-        logger.info(f"normalize 跳过（已完成） {doc['file_name']}")
-        return state
-    mark_stage_running(doc)
-    try:
-        normalize_document(doc["doc_id"])
-    except Exception as e:
-        mark_stage_failed(doc, STAGE_NORMALIZE, e)
-        raise
-    mark_stage_done(doc, STAGE_NORMALIZE)
+    normalize_document(state["doc"]["doc_id"])
     return state
 
 

@@ -9,7 +9,7 @@
 两张 LangGraph 图，节点逻辑写在 `processor/*/nodes/`，工具函数在 `utils/`。
 
 ```text
-导入图（一次处理一个文件，进度记在 Mongo documents.stage，中断后重跑即从断点续跑）
+导入图（一次处理一个文件，从头跑到尾；已就绪且内容未变的文件直接跳过）
 node_entry → node_parse → node_normalize → node_document_split → node_bge_embedding → node_import_milvus → node_enrich
   登记/去重    MinerU 解析   标题层级/表格/图片   正文按章节、表格独立    BGE-M3 稠密+稀疏     先写新版本再删旧版本   财务事实+文档摘要
 
@@ -66,7 +66,7 @@ uv run python cli.py check
 
 ## 使用
 
-导入资料目录（可重复执行：已就绪且内容未变的文件跳过，未完成的从断点续跑；解析结果按文件哈希缓存在 `data/artifacts/`）：
+导入资料目录（可重复执行：已就绪且内容未变的文件跳过，其余重做；解析结果按文件哈希缓存在 `data/artifacts/`，重做不会重复调用 MinerU）：
 
 ```bash
 uv run python cli.py ingest "D:\path\to\金融\数据"

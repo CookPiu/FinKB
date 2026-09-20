@@ -12,7 +12,7 @@ from processor.import_processor.state import ImportGraphState, create_default_st
 from utils.artifact_utils import CONTENT_LIST, get_doc_dir, read_json, write_json
 from utils.clients.mineru_utils import SUPPORTED_EXTS, MinerUError, download_and_extract, poll_batch, submit_batch
 from utils.markdown_utils import parse_markdown
-from utils.task_utils import STAGE_PARSE, is_stage_done, mark_stage_done, mark_stage_failed, mark_stage_running
+from utils.task_utils import save_doc_fields
 
 RETRIES = 2
 RETRY_WAIT_S = 20
@@ -76,28 +76,20 @@ def parse_document(doc: dict, reparse: bool) -> int:
 def node_parse(state: ImportGraphState):
     """
     节点功能：把原件解析成 content_list.json，记录页数。
-    上游 node_entry，下游 node_normalize；parse 阶段已完成则跳过（断点续跑）。
+    上游 node_entry，下游 node_normalize；解析结果按文件哈希缓存，内容没变时不会重复调用 MinerU。
     """
     doc = state["doc"]
-    if is_stage_done(doc, STAGE_PARSE):
-        logger.info(f"parse     跳过（已完成） {doc['file_name']}")
-        return state
-    mark_stage_running(doc)
-    try:
-        page_count = parse_document(doc, state.get("reparse"))
-    except Exception as e:
-        mark_stage_failed(doc, STAGE_PARSE, e)
-        raise
-    mark_stage_done(doc, STAGE_PARSE, {"page_count": page_count})
+    page_count = parse_document(doc, state.get("reparse"))
+    save_doc_fields(doc, {"page_count": page_count})
     return state
 
 
 if __name__ == "__main__":
     # 运行：uv run python -m processor.import_processor.nodes.node_parse <doc_id>
-    # 依赖 Mongo（读取文档记录）；parse 已完成的文档只会跳过，未完成的会调用 MinerU 并写进度
+    # 依赖 Mongo（读取文档记录）；没有解析缓存时会调用 MinerU
     import sys
 
     from processor.import_processor.nodes.node_entry import load_document
 
     result = node_parse(create_default_state(doc=load_document(sys.argv[1])))
-    logger.info(f"stage={result['doc']['stage']} page_count={result['doc']['page_count']}")
+    logger.info(f"page_count={result['doc']['page_count']}")
