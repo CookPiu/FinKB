@@ -2,7 +2,7 @@
 Milvus 集合 fin_chunks：建表、写入、删除，以及稠密 / 稀疏分别检索。
 文本、表格、摘要、图片描述都在同一集合，用 kind 区分。
 稠密与稀疏分开检索、在代码里做 RRF 融合（见 utils/search_utils.py），不用内置 hybrid_search：
-内置融合只返回融合分，拿不到稠密余弦原始分，而拒答判断要用它。
+内置融合只返回融合分，拿不到稠密余弦原始分，评测要看稠密分分布、逐路分析要看两路名次。
 """
 from pymilvus import DataType, MilvusClient
 
@@ -14,8 +14,8 @@ SECTION_MAX_LEN = 1024
 
 # 检索时返回的字段（不含向量）
 OUTPUT_FIELDS = [
-    "chunk_id", "doc_id", "version", "kind", "content_type", "entity_ids",
-    "section_path", "page_start", "page_end", "publish_date", "derived", "text",
+    "chunk_id", "doc_id", "version", "kind", "content_type",
+    "section_path", "page_start", "page_end", "derived", "text",
 ]
 
 # 全局 Milvus 客户端单例
@@ -45,11 +45,9 @@ def ensure_collection():
     schema.add_field("version", DataType.INT32)
     schema.add_field("kind", DataType.VARCHAR, max_length=32)
     schema.add_field("content_type", DataType.VARCHAR, max_length=64)
-    schema.add_field("entity_ids", DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=64, max_length=64)
     schema.add_field("section_path", DataType.VARCHAR, max_length=SECTION_MAX_LEN)
     schema.add_field("page_start", DataType.INT16)
     schema.add_field("page_end", DataType.INT16)
-    schema.add_field("publish_date", DataType.INT64)
     schema.add_field("derived", DataType.BOOL)
     schema.add_field("text", DataType.VARCHAR, max_length=TEXT_MAX_LEN)
     schema.add_field("dense", DataType.FLOAT_VECTOR, dim=DENSE_DIM)

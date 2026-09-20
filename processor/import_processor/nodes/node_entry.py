@@ -19,9 +19,8 @@ ACTION_SKIP = "skip"  # 同哈希已就绪，跳过
 # documents 记录的全部字段（_id 即 doc_id），按写入顺序排列
 DOC_FIELDS = [
     "_id", "doc_id", "file_name", "file_ext", "file_hash", "file_size", "rel_dir", "local_path", "source_path",
-    "content_type", "content_type_source", "document_title", "version", "status", "error",
-    "artifacts_dir", "page_count", "chunk_count", "supersedes", "institution_name", "publish_date",
-    "report_period", "entity_ids", "summary", "created_at", "updated_at",
+    "content_type", "document_title", "version", "status", "error",
+    "artifacts_dir", "page_count", "chunk_count", "supersedes", "summary", "created_at", "updated_at",
 ]
 
 # 有默认值的字段：读到缺少这些字段的旧记录时补齐
@@ -29,19 +28,13 @@ DOC_DEFAULTS = {
     "rel_dir": "",
     "source_path": "",
     "content_type": CONTENT_TYPE_OTHER,
-    "content_type_source": "dir_rule",
     "version": 0,  # 切片版本：切分节点每次产出新切片集时 +1；入库节点先写新版本再删旧版本
     "status": STATUS_RUNNING,
     "error": None,
     "page_count": None,
     "chunk_count": None,
     "supersedes": [],
-    # 以下字段由 node_enrich 填充
-    "institution_name": None,
-    "publish_date": None,
-    "report_period": None,
-    "entity_ids": [],
-    "summary": None,
+    "summary": None,  # node_enrich 填充
 }
 
 
@@ -111,7 +104,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "local_path": str(path),
         "source_path": source_path,
         "content_type": guess_content_type(rel_dir, path.name),
-        "content_type_source": "dir_rule",
         "document_title": title_from_filename(path.stem),
         "version": 0,
         "status": STATUS_RUNNING,
@@ -120,10 +112,6 @@ def build_new_document(path: Path, root: Path, file_hash: str, now) -> dict:
         "page_count": None,
         "chunk_count": None,
         "supersedes": supersedes,
-        "institution_name": None,
-        "publish_date": None,
-        "report_period": None,
-        "entity_ids": [],
         "summary": None,
         "created_at": now,
         "updated_at": now,

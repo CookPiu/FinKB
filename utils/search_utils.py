@@ -1,10 +1,10 @@
 """
 语义检索：稠密、稀疏分别检索，在代码中做 RRF 融合并保留两路原始分
 不用 Milvus 内置 hybrid_search：内置融合只返回融合分，拿不到稠密余弦原始分，
-而充分性判断（M2）依赖稠密原始分，且需要逐路分析召回效果。
+评测要看稠密分分布，逐路分析召回效果也需要两路的原始名次。
 命中 hit 为 dict：chunk_id, doc_id, version, kind, content_type, section_path, page_start, page_end, derived, text,
-entity_ids, score_dense, score_sparse, rank_dense, rank_sparse, score_rrf,
-以及来源元数据 file_name, document_title, source_path, publish_date（来自 documents，全程随证据携带）。
+score_dense, score_sparse, rank_dense, rank_sparse, score_rrf,
+以及来源元数据 file_name, document_title, source_path（来自 documents，全程随证据携带）。
 """
 from utils.clients.milvus_utils import quote_str, search_dense, search_sparse
 from utils.clients.mongo_utils import get_db
@@ -12,7 +12,7 @@ from utils.lm.embedding_utils import generate_query_embedding
 
 RRF_K = 60
 
-# 文档元数据缓存：doc_id → documents 里的 file_name / document_title / source_path / publish_date / version / status
+# 文档元数据缓存：doc_id → documents 里的 file_name / document_title / source_path / version / status
 _doc_cache = {}
 
 
@@ -21,7 +21,7 @@ def join_quoted(values: list) -> str:
     return ", ".join([quote_str(v) for v in values])
 
 
-def build_filter(kinds=None, content_types=None, doc_ids=None, entity_ids=None) -> str:
+def build_filter(kinds=None, content_types=None, doc_ids=None) -> str:
     """
     拼 Milvus 过滤表达式，各条件之间为 and；参数为空表示该项不限
     :return: 表达式字符串，没有任何条件时为空串
@@ -33,8 +33,6 @@ def build_filter(kinds=None, content_types=None, doc_ids=None, entity_ids=None) 
         parts.append(f"content_type in [{join_quoted(content_types)}]")
     if doc_ids:
         parts.append(f"doc_id in [{join_quoted(doc_ids)}]")
-    if entity_ids:
-        parts.append(f"ARRAY_CONTAINS_ANY(entity_ids, [{join_quoted(entity_ids)}])")
     return " and ".join(parts)
 
 
@@ -51,7 +49,6 @@ def new_hit(row: dict) -> dict:
         "page_end": row["page_end"],
         "derived": row["derived"],
         "text": row["text"],
-        "entity_ids": list(row.get("entity_ids") or []),
         "score_dense": None,
         "score_sparse": None,
         "rank_dense": None,
@@ -60,7 +57,6 @@ def new_hit(row: dict) -> dict:
         "file_name": "",
         "document_title": "",
         "source_path": "",
-        "publish_date": None,
     }
 
 
@@ -101,7 +97,7 @@ def get_doc_meta(doc_ids: set) -> dict:
     """
     missing = [doc_id for doc_id in doc_ids if doc_id not in _doc_cache]
     if missing:
-        fields = {"file_name": 1, "document_title": 1, "source_path": 1, "publish_date": 1, "version": 1, "status": 1}
+        fields = {"file_name": 1, "document_title": 1, "source_path": 1, "version": 1, "status": 1}
         for doc in get_db().documents.find({"_id": {"$in": missing}}, fields):
             _doc_cache[doc["_id"]] = doc
     result = {}
@@ -125,7 +121,6 @@ def attach_doc_meta(hits: list, top_k: int) -> list:
         hit["file_name"] = doc.get("file_name", "")
         hit["document_title"] = doc.get("document_title", "")
         hit["source_path"] = doc.get("source_path", "")
-        hit["publish_date"] = doc.get("publish_date")
         results.append(hit)
         if len(results) >= top_k:
             break
@@ -133,17 +128,17 @@ def attach_doc_meta(hits: list, top_k: int) -> list:
 
 
 def semantic_search(query: str, top_k: int = 5, candidates: int = 30, kinds=None, content_types=None,
-                    doc_ids=None, entity_ids=None) -> list:
+                    doc_ids=None) -> list:
     """
     稠密 + 稀疏检索并融合
     :param query: 问题
     :param top_k: 最多返回几条
     :param candidates: 每一路先取多少条候选
-    :param kinds / content_types / doc_ids / entity_ids: 过滤条件，见 build_filter
+    :param kinds / content_types / doc_ids: 过滤条件，见 build_filter
     :return: 命中 dict 列表，按融合分降序
     """
     embedding = generate_query_embedding(query)
-    expr = build_filter(kinds, content_types, doc_ids, entity_ids)
+    expr = build_filter(kinds, content_types, doc_ids)
     dense = search_dense(embedding["dense"], candidates, expr)
     sparse = search_sparse(embedding["sparse"], candidates, expr)
     fused = rrf_fuse(dense, sparse)

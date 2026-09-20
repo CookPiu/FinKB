@@ -53,11 +53,9 @@ def build_rows(doc: dict, chunks: list, vectors: list) -> list:
                 "version": doc["version"],
                 "kind": chunk["kind"],
                 "content_type": doc["content_type"],
-                "entity_ids": doc["entity_ids"][:64],
                 "section_path": fit_bytes(chunk["section_path"], SECTION_MAX_LEN),
                 "page_start": chunk["page_start"],
                 "page_end": chunk["page_end"],
-                "publish_date": doc["publish_date"] or 0,
                 "derived": chunk["derived"],
                 "text": fit_bytes(chunk["text"], TEXT_MAX_LEN),
                 "dense": vector["dense"],
@@ -130,7 +128,7 @@ def node_import_milvus(state: ImportGraphState):
 if __name__ == "__main__":
     # 运行：uv run python -m processor.import_processor.nodes.node_import_milvus
     # 不依赖任何服务：只用假文档、假向量构造 Milvus 行并打印，不写库
-    test_doc = {"doc_id": "demo", "version": 1, "content_type": "其他", "entity_ids": [], "publish_date": None}
+    test_doc = {"doc_id": "demo", "version": 1, "content_type": "其他"}
     test_chunks = [{"seq": 0, "kind": "text", "section_path": "第一节", "page_start": 1, "page_end": 1,
                     "derived": False, "text": "示例正文"}]
     test_rows = build_rows(test_doc, test_chunks, [{"dense": [0.0] * 4, "sparse": {}}])
