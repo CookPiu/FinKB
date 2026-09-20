@@ -10,8 +10,8 @@
 
 ```text
 导入图（一次处理一个文件，从头跑到尾；已就绪且内容未变的文件直接跳过）
-node_entry → node_parse → node_chunk → node_enrich → node_index
-  登记/去重    MinerU 解析   标题层级/表格/图片，正文按章节、表格独立   财务事实与摘要也做成切片   BGE-M3 稠密+稀疏，写入后清掉旧切片
+node_entry → node_parse → node_chunk → node_index
+  登记/去重    MinerU 解析   版面块整理 + 正文/表格/图片/财务事实/摘要五类切片一次产齐   BGE-M3 稠密+稀疏，写入后清掉旧切片
 
 查询图（提示词主导：怎么回答由模型按规则手册判断，代码只保留三道闸门）
 node_query_plan → node_gather_evidence → node_answer_output
@@ -138,7 +138,7 @@ uv run python -m evaluation.runner --tag <标签> --mode answer
 | 必含内容通过率（三份季报与统计公报的数值题全部原值命中） | 0.96 | 0.96 |
 | 多轮链（含澄清流程） | 4 / 4 | 3 / 4 |
 | 证据含金标原句 / 引用文件含金标文件 | 0.982 / 1.0 | 0.927 / 1.0 |
-| 延迟中位 / p90 | 3.3 s / 4.8 s | 3.8 s / 5.8 s |
+| 延迟中位 / p90 | 3.5 s / 5.8 s | 3.8 s / 5.8 s |
 
 八个类别（产品、公告资讯、风险、知识、流程、负例、合规探针、多轮）的行为准确率都是 1.0。
 
