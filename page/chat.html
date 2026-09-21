@@ -7,48 +7,76 @@
 <link rel="icon" href="data:,">
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --side: #eef1f5; --border: #dde2e8; --text: #1f2933; --muted: #6b7785;
+    --bg: #f5f6f8; --panel: #ffffff; --side: #eef1f5; --border: #dde2e8; --text: #1f2933; --muted: #6b7785; --faint: #9aa4b0;
     --accent: #1f6feb; --accent-soft: #e8f0fe; --user: #1f6feb; --user-text: #ffffff;
     --notice-bg: #fff8e6; --notice-border: #f0c36d; --notice-text: #7a5300;
     --refuse-bg: #f3f4f6; --error-bg: #fdecec; --error-text: #b42318; --card: #fafbfc;
+    --ok: #1a7f37; --ok-soft: #e6f4ea; --warn: #9a6700; --warn-soft: #fff4d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111418; --panel: #181c21; --side: #14181d; --border: #2b3139; --text: #e6e9ed; --muted: #95a0ad;
+      --bg: #111418; --panel: #181c21; --side: #14181d; --border: #2b3139; --text: #e6e9ed; --muted: #95a0ad; --faint: #6b7580;
       --accent: #4c8dff; --accent-soft: #1d2a40; --user: #2f6fe0; --user-text: #ffffff;
       --notice-bg: #2a2413; --notice-border: #7a5f1f; --notice-text: #f0cf7a;
       --refuse-bg: #20252b; --error-bg: #3a1d1d; --error-text: #ff9b91; --card: #1c2127;
+      --ok: #56d364; --ok-soft: #16301d; --warn: #e3b341; --warn-soft: #2e2711;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-         color: var(--text); background: var(--bg); height: 100vh; display: flex; }
-  button { font: inherit; cursor: pointer; }
-  #sidebar { width: 260px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--border);
+         color: var(--text); background: var(--bg); height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* 侧栏：导航 + 历史会话 */
+  #sidebar { width: 264px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--border);
              display: flex; flex-direction: column; }
-  #sidebar h1 { font-size: 17px; margin: 18px 16px 4px; }
-  #sidebar .sub { font-size: 12px; color: var(--muted); margin: 0 16px 12px; }
-  #newChat { margin: 0 12px 12px; padding: 9px; border: 1px solid var(--border); border-radius: 8px;
-             background: var(--panel); color: var(--text); }
-  #newChat:hover { border-color: var(--accent); }
+  .brand { display: flex; gap: 10px; align-items: center; padding: 16px 16px 12px; }
+  .logo { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #fff; display: grid;
+          place-items: center; font-weight: 700; flex-shrink: 0; }
+  .brand .name { font-weight: 600; }
+  .brand .sub { font-size: 12px; color: var(--muted); }
+  .nav { display: flex; gap: 4px; margin: 0 12px 12px; padding: 3px; background: var(--panel);
+         border: 1px solid var(--border); border-radius: 9px; }
+  .nav button { flex: 1; border: none; background: none; padding: 5px 0; border-radius: 7px; color: var(--muted); position: relative; }
+  .nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav .dot { position: absolute; top: 7px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+              animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  #newChat { margin: 0 12px 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+  #newChat:hover { border-color: var(--accent); color: var(--accent); }
   #sessionList { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
-  .session { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 2px; }
+  .group-label { font-size: 12px; color: var(--faint); margin: 10px 10px 4px; }
+  .session { padding: 7px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 1px; }
   .session:hover { background: var(--panel); }
   .session.active { background: var(--accent-soft); }
   .session .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
   .session .d { font-size: 12px; color: var(--muted); }
-  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #topbar { display: none; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  #banner { display: none; margin: 12px auto 0; max-width: 820px; width: calc(100% - 32px); padding: 8px 12px;
+  .side-empty { font-size: 13px; color: var(--muted); padding: 8px 10px; }
+  #scrim { display: none; }
+
+  /* 两个视图共用的顶栏 */
+  .view { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 0 16px; height: 52px; flex-shrink: 0;
+            border-bottom: 1px solid var(--border); background: var(--panel); }
+  .topbar .title { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu { display: none; border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 2px 9px; }
+  .pill { font-size: 12px; color: var(--muted); border: 1px solid var(--border); background: var(--bg);
+          border-radius: 12px; padding: 2px 10px; white-space: nowrap; }
+  button.pill:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* 问答 */
+  #banner { margin: 12px auto 0; max-width: 820px; width: calc(100% - 32px); padding: 8px 12px;
             border-radius: 8px; background: var(--error-bg); color: var(--error-text); font-size: 14px; }
   #messages { flex: 1; overflow-y: auto; padding: 16px; }
   .wrap { max-width: 820px; margin: 0 auto; }
-  .empty { text-align: center; color: var(--muted); margin-top: 12vh; }
-  .empty h2 { color: var(--text); font-weight: 600; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
-  .chip { padding: 7px 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel);
-          color: var(--text); font-size: 14px; }
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .welcome { text-align: center; color: var(--muted); margin: 8vh 0 24px; }
+  .welcome h2 { color: var(--text); font-weight: 600; margin: 0 0 6px; }
+  .examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 24px; text-align: left; }
+  .ex-group { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); padding: 10px 12px; }
+  .ex-group .g { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .ex { display: block; width: 100%; text-align: left; border: none; background: none; padding: 5px 0; font-size: 14px; }
+  .ex:hover { color: var(--accent); }
   .msg { margin: 14px 0; display: flex; }
   .msg.user { justify-content: flex-end; }
   .bubble { max-width: 88%; padding: 10px 14px; border-radius: 12px; word-break: break-word; }
@@ -57,21 +85,35 @@
   .assistant.kind-refuse .bubble, .assistant.kind-decline_advice .bubble, .assistant.kind-realtime_notice .bubble { background: var(--refuse-bg); }
   .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; margin-bottom: 6px;
            background: var(--accent-soft); color: var(--accent); }
+  .thinking { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent);
+             border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .body p { margin: 0 0 8px; }
   .body ul, .body ol { margin: 0 0 8px; padding-left: 22px; }
   .body .h { font-weight: 600; margin: 6px 0; }
+  .body code { font-family: Consolas, monospace; font-size: 13px; background: var(--bg); padding: 0 4px; border-radius: 4px; }
+  .tbl { overflow-x: auto; margin: 4px 0 10px; }
+  .tbl table { border-collapse: collapse; font-size: 13px; }
+  .tbl th, .tbl td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+  .tbl th { background: var(--card); font-weight: 600; }
+  .opt { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; padding: 3px 10px; margin: 2px 0; text-align: left; }
+  .opt:hover { border-color: var(--accent); color: var(--accent); }
   .notice { margin: 8px 0 4px; padding: 8px 10px; border-left: 3px solid var(--notice-border);
             background: var(--notice-bg); color: var(--notice-text); font-size: 13px; border-radius: 4px; }
   sup.cite { color: var(--accent); cursor: pointer; font-size: 11px; margin-left: 1px; }
   .sources { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; }
   .sources .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  .card { font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); margin-bottom: 6px; }
+  .card { font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card);
+          margin-bottom: 6px; transition: border-color .2s; }
   .card.flash { border-color: var(--accent); }
   .card .meta { color: var(--muted); }
   .card a { color: var(--accent); text-decoration: none; }
-  .actions { margin-top: 6px; display: flex; gap: 8px; }
+  .kind-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 4px; font-weight: normal; }
+  .actions { margin-top: 6px; display: flex; gap: 14px; align-items: center; }
   .actions button { border: none; background: none; color: var(--muted); font-size: 13px; padding: 2px 0; }
   .actions button:hover { color: var(--accent); }
+  .actions .elapsed { margin-left: auto; font-size: 12px; color: var(--faint); }
   .err { color: var(--error-text); background: var(--error-bg); padding: 8px 10px; border-radius: 6px; font-size: 14px; }
   .cursor::after { content: "▍"; animation: blink 1s steps(1) infinite; color: var(--muted); }
   @keyframes blink { 50% { opacity: 0; } }
@@ -80,77 +122,189 @@
   #input { flex: 1; resize: none; min-height: 44px; max-height: 160px; padding: 10px 12px; border: 1px solid var(--border);
            border-radius: 10px; font: inherit; color: var(--text); background: var(--bg); }
   #input:focus { outline: none; border-color: var(--accent); }
-  #send { padding: 10px 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff; }
+  #send { height: 44px; padding: 0 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff; }
   #send:disabled { opacity: .5; cursor: not-allowed; }
-  .hint { max-width: 820px; margin: 6px auto 0; font-size: 12px; color: var(--muted); }
+  .hint { max-width: 820px; margin: 6px auto 0; font-size: 12px; color: var(--muted); display: flex; gap: 12px; }
+  .hint span:first-child { flex: 1; }
+  #counter.over { color: var(--error-text); }
+
+  /* 资料导入 */
+  .scroll { flex: 1; overflow-y: auto; padding: 16px; }
+  .wide { max-width: 1040px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .panel h3 { margin: 0; font-size: 15px; }
+  .panel-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .panel-head h3 { flex: 1; }
+  #drop { border: 2px dashed var(--border); border-radius: 10px; padding: 26px 16px; text-align: center; cursor: pointer;
+          transition: border-color .15s, background .15s; }
+  #drop:hover, #drop:focus, #drop.over { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+  #drop .big { font-size: 16px; font-weight: 600; }
+  #drop .small { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  #importNotice { margin-top: 10px; font-size: 13px; padding: 7px 10px; border-radius: 6px; }
+  #importNotice.ok { background: var(--ok-soft); color: var(--ok); }
+  #importNotice.error { background: var(--error-bg); color: var(--error-text); }
+  .flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .flow .node { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--card); font-size: 13px; position: relative; }
+  .flow .node b { display: block; font-size: 14px; }
+  .flow .node code { font-size: 11px; color: var(--faint); }
+  .flow .node div { color: var(--muted); margin-top: 2px; }
+  .task { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .task-head { display: flex; gap: 8px; align-items: center; }
+  .task-head .fn { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status { font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; background: var(--bg); color: var(--muted); }
+  .status.ok { background: var(--ok-soft); color: var(--ok); }
+  .status.run { background: var(--accent-soft); color: var(--accent); }
+  .status.fail { background: var(--error-bg); color: var(--error-text); }
+  .status.skip { background: var(--warn-soft); color: var(--warn); }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; margin: 10px 0 6px; }
+  .step { position: relative; text-align: center; font-size: 13px; color: var(--muted); }
+  .step::before { content: ""; position: absolute; top: 8px; left: -50%; width: 100%; height: 2px; background: var(--border); }
+  .step:first-child::before { display: none; }
+  .step.done::before, .step.run::before, .step.fail::before { background: var(--accent); }
+  .bullet { position: relative; z-index: 1; display: block; width: 18px; height: 18px; margin: 0 auto 2px; border-radius: 50%;
+            background: var(--panel); border: 2px solid var(--border); }
+  .step.done .bullet { background: var(--accent); border-color: var(--accent); }
+  .step.run .bullet { border-color: var(--accent); border-top-color: transparent; animation: spin .9s linear infinite; }
+  .step.fail .bullet { background: var(--error-text); border-color: var(--error-text); }
+  .step.done, .step.run { color: var(--text); }
+  .step .tm { display: block; font-size: 11px; color: var(--faint); min-height: 16px; }
+  .task-note { font-size: 13px; color: var(--muted); }
+  .task-note.fail { color: var(--error-text); word-break: break-all; }
+  #docSearch { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text);
+               font: inherit; font-size: 14px; width: 220px; }
+  #docSearch:focus { outline: none; border-color: var(--accent); }
+  .seg { display: flex; gap: 4px; }
+  .seg button { border: 1px solid var(--border); background: var(--panel); border-radius: 14px; padding: 2px 10px; font-size: 13px; color: var(--muted); }
+  .seg button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .table-wrap { overflow-x: auto; }
+  #docTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+  #docTable th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  #docTable td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  #docTable tr:last-child td { border-bottom: none; }
+  #docTable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #docTable th.num { text-align: right; }
+  #docTable .nowrap { white-space: nowrap; }
+  .doc-title { font-weight: 500; }
+  .doc-file { font-size: 12px; color: var(--muted); word-break: break-all; }
+  .doc-err { font-size: 12px; color: var(--error-text); margin-top: 2px; max-width: 260px; word-break: break-all; }
+  #docTable a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .empty-cell { text-align: center; color: var(--muted); padding: 20px !important; }
+
   @media (max-width: 760px) {
-    #sidebar { position: fixed; z-index: 10; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .2s; }
+    #sidebar { position: fixed; z-index: 20; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .2s; }
     #sidebar.open { transform: none; }
-    #topbar { display: flex; }
+    #sidebar.open + #scrim { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0, 0, 0, .3); }
+    .menu { display: block; }
     .bubble, .assistant .bubble { max-width: 100%; width: 100%; }
+    .examples { grid-template-columns: minmax(0, 1fr); }
+    .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #docSearch { width: 100%; }
+    .hint { flex-direction: column; gap: 2px; }
   }
 </style>
 </head>
 <body>
 <aside id="sidebar">
-  <h1>FinKB 金融知识库</h1>
-  <div class="sub">金融资料查询与解读，不提供投资建议</div>
+  <div class="brand">
+    <div class="logo">F</div>
+    <div><div class="name">FinKB 金融知识库</div><div class="sub">资料查询与解读，不提供投资建议</div></div>
+  </div>
+  <nav class="nav">
+    <button data-view="chat">问答</button>
+    <button data-view="import">资料导入<span class="dot" id="navDot" hidden></span></button>
+  </nav>
   <button id="newChat">＋ 新对话</button>
   <div id="sessionList"></div>
 </aside>
-<main id="main">
-  <div id="topbar"><button id="menu" class="chip">☰ 历史</button><strong>FinKB</strong></div>
-  <div id="banner"></div>
+<div id="scrim"></div>
+
+<main id="chatView" class="view">
+  <header class="topbar">
+    <button class="menu" aria-label="打开侧栏">☰</button>
+    <div class="title" id="chatTitle">新对话</div>
+    <button class="pill kb-pill" data-view="import" title="查看知识库文档"></button>
+  </header>
+  <div id="banner" hidden></div>
   <div id="messages"><div class="wrap" id="thread"></div></div>
   <div id="composer">
     <div class="wrap">
-      <textarea id="input" rows="1" placeholder="输入问题，Enter 发送，Shift+Enter 换行" maxlength="500"></textarea>
+      <textarea id="input" rows="1" placeholder="输入问题，Enter 发送" maxlength="500"></textarea>
       <button id="send">发送</button>
     </div>
-    <div class="hint">回答仅基于知识库资料，可能存在滞后；金融产品存在风险，正式信息以产品合同、公告原文和监管文件为准。</div>
+    <div class="hint"><span>回答仅基于知识库资料，可能存在滞后；金融产品存在风险，正式信息以产品合同、公告原文和监管文件为准。</span><span id="counter"></span></div>
   </div>
 </main>
+
+<main id="importView" class="view" hidden>
+  <header class="topbar">
+    <button class="menu" aria-label="打开侧栏">☰</button>
+    <div class="title">资料导入</div>
+    <span class="pill kb-pill"></span>
+  </header>
+  <div class="scroll">
+    <div class="wrap wide">
+      <section class="panel">
+        <div id="drop" tabindex="0" role="button">
+          <div class="big">拖入文件，或点击选择</div>
+          <div class="small">支持 PDF、Word、PowerPoint、Markdown，可多选；同名文件视为新版本，会替换旧文档；内容没变的文件自动跳过</div>
+        </div>
+        <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.md" hidden>
+        <div id="importNotice" hidden></div>
+        <div class="flow" id="flow"></div>
+      </section>
+      <section class="panel" id="taskPanel" hidden>
+        <div class="panel-head"><h3>导入任务</h3><span class="pill">一次导入一个文件，其余排队</span></div>
+        <div id="taskList"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>知识库文档</h3>
+          <input id="docSearch" type="search" placeholder="搜索资料名称或文件名">
+          <div class="seg" id="docStatus"></div>
+        </div>
+        <div class="table-wrap">
+          <table id="docTable">
+            <thead><tr><th>资料</th><th>内容类型</th><th class="num">页数</th><th class="num">切片</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
+            <tbody id="docBody"><tr><td colspan="7" class="empty-cell">加载中…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
 <script>
-const EXAMPLES = ["茅台今年一季度营业收入是多少？", "华夏债券C的托管费是多少？", "什么是ETF？",
-                  "基金赎回多久到账？", "这份货币政策执行报告主要讲了什么？", "现在该买茅台吗？"];
+const EXAMPLES = [
+  {group: "产品资料", questions: ["华夏债券C的托管费是多少？", "华夏自由现金流联接基金的钱主要投到哪里去？"]},
+  {group: "公司公告", questions: ["茅台今年一季度营业收入是多少？", "平安银行一季度净息差为什么下降了？"]},
+  {group: "知识与流程", questions: ["ETF的申购赎回跟普通开放式基金有什么不一样？", "货币ETF卖出或者赎回以后，钱多久能到账？"]},
+  {group: "澄清与合规", questions: ["华夏的那只基金管理费多少？", "现在该买茅台吗？"]},
+];
 const KIND_BADGE = { refuse: "资料不足", clarify: "需要确认", decline_advice: "不提供投资建议", realtime_notice: "非实时数据" };
+const CHUNK_KIND = { table: "表格", image_desc: "图表", fact: "财务指标", summary: "文档摘要" };
+const MAX_CHARS = 500;
+// 导入图的四个节点，与 processor/import_processor/main_graph.py 一致
+const IMPORT_API = "/import";
+const NODES = [
+  {id: "node_entry", label: "登记", desc: "按文件哈希去重，原件存入 MinIO"},
+  {id: "node_parse", label: "解析", desc: "MinerU 版面解析，结果按哈希缓存"},
+  {id: "node_chunk", label: "切分", desc: "正文、表格、图表、财务指标、摘要五类切片"},
+  {id: "node_index", label: "索引", desc: "BGE-M3 稠密 + 稀疏向量写入 Milvus"},
+];
+const DOC_STATUS = { ready: ["就绪", "ok"], running: ["导入中", "run"], failed: ["失败", "fail"] };
+const ACTIVE = ["queued", "running"];
+
 const $ = (id) => document.getElementById(id);
 let sessionId = null;
+let sessions = [];
 let busy = false;
+let documents = [];
+let tasks = [];
+let taskSignature = "";
+let pollTimer = null;
+let docStatusFilter = "all";
 
-function esc(s) { return s.replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
-
-// 简易 Markdown：粗体、列表、标题、段落；[E1] 引用编号转为可点击的上标；风险/时效提示单独成框
-function inline(s) {
-  return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-               .replace(/\[E(\d+)\]/g, '<sup class="cite" data-eid="$1">[$1]</sup>');
-}
-function renderMarkdown(text) {
-  const out = []; let list = null;
-  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!line) { closeList(); continue; }
-    if (/^(风险提示|时效提示)：/.test(line)) { closeList(); out.push(`<div class="notice">${inline(line)}</div>`); continue; }
-    let m;
-    if ((m = line.match(/^[-*•]\s+(.*)$/))) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
-    if ((m = line.match(/^\d+[.、]\s*(.*)$/))) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
-    closeList();
-    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { out.push(`<div class="h">${inline(m[1])}</div>`); continue; }
-    out.push(`<p>${inline(line)}</p>`);
-  }
-  closeList();
-  return out.join("");
-}
-
-function sourceCard(s) {
-  const pages = s.page_start ? (s.page_start === s.page_end ? `第${s.page_start}页` : `第${s.page_start}-${s.page_end}页`) : "";
-  const entity = s.entity_name ? `${esc(s.entity_name)}${s.entity_codes && s.entity_codes.length ? "（" + esc(s.entity_codes.join("、")) + "）" : ""}` : "";
-  const link = s.source_path ? `<a href="${esc(s.source_path)}${s.page_start ? "#page=" + s.page_start : ""}" target="_blank" rel="noopener">打开原件</a>` : "";
-  const meta = [esc(s.content_type || ""), entity, esc(s.file_name || ""), pages].filter(Boolean).join(" ｜ ");
-  return `<div class="card" data-eid="${s.eid}"><strong>[E${s.eid}] ${esc(s.document_title || s.file_name || "")}</strong>
-          <div class="meta">${meta}${s.derived ? " ｜ 据图表示意" : ""} ${link}</div></div>`;
-}
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
 
 function localTime(iso) {
   const d = new Date(iso);
@@ -159,36 +313,134 @@ function localTime(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function scrollBottom() { const m = $("messages"); m.scrollTop = m.scrollHeight; }
-function banner(text) { const b = $("banner"); b.textContent = text || ""; b.style.display = text ? "block" : "none"; }
+function fmtSeconds(s) {
+  if (s === null || s === undefined) return "";
+  if (s < 60) return `${s.toFixed(1)} 秒`;
+  return `${Math.floor(s / 60)} 分 ${Math.round(s % 60)} 秒`;
+}
+
+// ---------------- 视图切换 ----------------
+
+function showView(name) {
+  $("chatView").hidden = name !== "chat";
+  $("importView").hidden = name !== "import";
+  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  history.replaceState(null, "", "#" + name);
+  $("sidebar").classList.remove("open");
+  if (name === "import") { loadDocuments(); loadTasks(); }
+  else $("input").focus();
+}
+
+// ---------------- 问答：渲染 ----------------
+
+// 简易 Markdown：粗体、行内代码、列表、标题、表格、段落；[E1] 引用编号转为可点击的上标；风险/时效提示单独成框
+function inline(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+               .replace(/`([^`]+)`/g, "<code>$1</code>")
+               .replace(/\[E(\d+)\]/g, '<sup class="cite" data-eid="$1">[$1]</sup>');
+}
+
+function splitRow(row) { return row.replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim()); }
+function isSeparator(row) { return splitRow(row).every(c => /^:?-{2,}:?$/.test(c)); }
+
+function renderTable(rows) {
+  let head = null;
+  if (rows.length >= 2 && isSeparator(rows[1])) head = splitRow(rows.shift());
+  const body = rows.filter(r => !isSeparator(r)).map(splitRow);
+  const th = head ? `<thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead>` : "";
+  const tb = body.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("");
+  return `<div class="tbl"><table>${th}<tbody>${tb}</tbody></table></div>`;
+}
+
+// clarify 为真时，有序列表的候选对象渲染成可点击的按钮（回复“第 N 个”，由后端按序号匹配）
+function renderMarkdown(text, clarify) {
+  const lines = text.split("\n");
+  const out = []; let list = null; let index = 0;
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) { closeList(); continue; }
+    if (line.startsWith("|")) {
+      closeList();
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(lines[i++].trim());
+      i--;
+      out.push(renderTable(rows));
+      continue;
+    }
+    if (/^(风险提示|时效提示)：/.test(line)) { closeList(); out.push(`<div class="notice">${inline(line)}</div>`); continue; }
+    let m;
+    if ((m = line.match(/^[-*•]\s+(.*)$/))) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inline(m[1])}</li>`); continue; }
+    if ((m = line.match(/^\d+[.、]\s*(.*)$/))) {
+      if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; index = 0; }
+      index++;
+      out.push(clarify && index <= 4 ? `<li><button class="opt" data-reply="第${index}个">${inline(m[1])}</button></li>` : `<li>${inline(m[1])}</li>`);
+      continue;
+    }
+    closeList();
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { out.push(`<div class="h">${inline(m[1])}</div>`); continue; }
+    out.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return out.join("");
+}
+
+function pageText(s) {
+  if (!s.page_start) return "";
+  return s.page_start === s.page_end ? `第${s.page_start}页` : `第${s.page_start}-${s.page_end}页`;
+}
+
+function sourceCard(s) {
+  const entity = s.entity_name ? `${esc(s.entity_name)}${s.entity_codes && s.entity_codes.length ? "（" + esc(s.entity_codes.join("、")) + "）" : ""}` : "";
+  const link = s.source_path ? `<a href="${esc(s.source_path)}${s.page_start ? "#page=" + s.page_start : ""}" target="_blank" rel="noopener">打开原件</a>` : "";
+  const meta = [esc(s.content_type || ""), entity, esc(s.file_name || ""), pageText(s)].filter(Boolean).join(" ｜ ");
+  const tag = CHUNK_KIND[s.kind] ? `<span class="kind-tag">${CHUNK_KIND[s.kind]}</span>` : "";
+  return `<div class="card" data-eid="${s.eid}"><strong>[E${s.eid}] ${esc(s.document_title || s.file_name || "")}</strong>${tag}
+          <div class="meta">${meta}${s.derived ? " ｜ 据图表示意" : ""} ${link}</div></div>`;
+}
+
+const messagesBox = () => $("messages");
+function nearBottom() { const m = messagesBox(); return m.scrollHeight - m.scrollTop - m.clientHeight < 80; }
+function scrollBottom() { const m = messagesBox(); m.scrollTop = m.scrollHeight; }
+function banner(text) { $("banner").textContent = text || ""; $("banner").hidden = !text; }
 
 function addUser(text) {
   const div = document.createElement("div");
   div.className = "msg user";
   div.innerHTML = `<div class="bubble">${esc(text)}</div>`;
-  $("thread").appendChild(div); scrollBottom();
+  $("thread").appendChild(div);
+  scrollBottom();
 }
 
 function addAssistant(question) {
   const div = document.createElement("div");
   div.className = "msg assistant";
-  div.innerHTML = `<div class="bubble"><div class="head"></div><div class="body cursor"></div><div class="sources" hidden></div>
-                   <div class="actions"><button class="retry">↻ 重新提问</button></div></div>`;
+  div.innerHTML = `<div class="bubble"><div class="head"></div><div class="body"></div><div class="sources" hidden></div>
+                   <div class="actions"><button class="copy">复制</button><button class="retry">↻ 重新提问</button><span class="elapsed"></span></div></div>`;
   div.querySelector(".retry").onclick = () => ask(question);
+  div.querySelector(".copy").onclick = (e) => copyText(div.dataset.text || "", e.target);
   div.addEventListener("click", (e) => {
-    const eid = e.target.dataset && e.target.dataset.eid;
-    if (!e.target.classList.contains("cite") || !eid) return;
-    const card = div.querySelector(`.card[data-eid="${eid}"]`);
-    if (card) { card.classList.add("flash"); card.scrollIntoView({block: "nearest"}); setTimeout(() => card.classList.remove("flash"), 1500); }
+    const target = e.target.closest(".cite, .opt");
+    if (!target) return;
+    if (target.classList.contains("opt")) { ask(target.dataset.reply); return; }
+    const card = div.querySelector(`.card[data-eid="${target.dataset.eid}"]`);
+    if (card) { card.classList.add("flash"); card.scrollIntoView({block: "nearest", behavior: "smooth"}); setTimeout(() => card.classList.remove("flash"), 1500); }
   });
-  $("thread").appendChild(div); scrollBottom();
+  $("thread").appendChild(div);
+  scrollBottom();
   return div;
 }
 
+function showThinking(div) {
+  div.querySelector(".body").innerHTML = `<div class="thinking"><span class="spinner"></span>正在检索资料并组织回答<span class="t"></span></div>`;
+}
+
 function fillAssistant(div, {text, kind, sources, streaming}) {
+  const stick = nearBottom();
   const body = div.querySelector(".body");
-  body.innerHTML = renderMarkdown(text || "");
+  body.innerHTML = renderMarkdown(text || "", kind === "clarify");
   body.classList.toggle("cursor", !!streaming);
+  div.dataset.text = text || "";
   if (kind) {
     div.classList.add("kind-" + kind);
     div.querySelector(".head").innerHTML = KIND_BADGE[kind] ? `<span class="badge">${KIND_BADGE[kind]}</span>` : "";
@@ -196,8 +448,14 @@ function fillAssistant(div, {text, kind, sources, streaming}) {
   const box = div.querySelector(".sources");
   if (sources && sources.length) {
     box.hidden = false;
-    box.innerHTML = `<div class="label">引用来源</div>` + sources.map(sourceCard).join("");
+    box.innerHTML = `<div class="label">引用来源 · ${sources.length}</div>` + sources.map(sourceCard).join("");
+    const byEid = Object.fromEntries(sources.map(s => [String(s.eid), s]));
+    body.querySelectorAll("sup.cite").forEach(sup => {
+      const s = byEid[sup.dataset.eid];
+      if (s) sup.title = [s.document_title || s.file_name, pageText(s)].filter(Boolean).join(" ");
+    });
   }
+  if (stick) scrollBottom();
 }
 
 function showError(div, message, question) {
@@ -211,6 +469,20 @@ function showError(div, message, question) {
   div.querySelector(".retry").onclick = () => ask(question);
 }
 
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text; document.body.appendChild(area); area.select();
+    document.execCommand("copy"); area.remove();
+  }
+  button.textContent = "已复制";
+  setTimeout(() => { button.textContent = "复制"; }, 1200);
+}
+
+// ---------------- 问答：请求 ----------------
+
 function parseSSE(raw) {
   let event = "message", data = "";
   for (const line of raw.split("\n")) {
@@ -220,13 +492,20 @@ function parseSSE(raw) {
   try { return {event, data: JSON.parse(data || "{}")}; } catch { return {event, data: {}}; }
 }
 
+
 async function ask(question) {
   question = (question || "").trim();
   if (!question || busy) return;
   busy = true; $("send").disabled = true; banner("");
-  const empty = document.querySelector(".empty"); if (empty) empty.remove();
+  const welcome = document.querySelector(".welcome"); if (welcome) welcome.remove();
   addUser(question);
   const div = addAssistant(question);
+  showThinking(div);
+  const started = performance.now();
+  const tick = setInterval(() => {
+    const t = div.querySelector(".thinking .t");
+    if (t) t.textContent = ` · ${((performance.now() - started) / 1000).toFixed(1)} 秒`;
+  }, 100);
   let text = "", sources = [], gotFinal = false;
   try {
     const resp = await fetch("/query", {method: "POST", headers: {"Content-Type": "application/json"},
@@ -243,11 +522,12 @@ async function ask(question) {
       let idx;
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const {event, data} = parseSSE(buf.slice(0, idx)); buf = buf.slice(idx + 2);
-        if (event === "delta") { text += data.text || ""; fillAssistant(div, {text, streaming: true}); scrollBottom(); }
+        if (event === "delta") { text += data.text || ""; fillAssistant(div, {text, streaming: true}); }
         else if (event === "sources") { sources = data.sources || []; }
         else if (event === "final") {
           gotFinal = true; sessionId = data.session_id;
           fillAssistant(div, {text: data.answer || text, kind: data.kind, sources: data.sources || sources});
+          div.querySelector(".elapsed").textContent = `用时 ${((performance.now() - started) / 1000).toFixed(1)} 秒`;
           loadSessions();
         } else if (event === "error") {
           gotFinal = true; if (data.session_id) sessionId = data.session_id;
@@ -260,31 +540,57 @@ async function ask(question) {
     fillAssistant(div, {text});
     showError(div, e instanceof TypeError ? "无法连接服务，请确认查询服务已启动后重试。" : e.message, question);
   } finally {
-    busy = false; $("send").disabled = false; scrollBottom();
+    clearInterval(tick); busy = false; $("send").disabled = false;
   }
 }
 
-function showEmpty() {
-  $("thread").innerHTML = `<div class="empty"><h2>有什么可以帮您？</h2>
-    <div>可以询问金融产品、公司公告、宏观政策、金融知识和业务流程</div>
-    <div class="chips">${EXAMPLES.map(q => `<button class="chip">${esc(q)}</button>`).join("")}</div></div>`;
-  document.querySelectorAll(".empty .chip").forEach(b => b.onclick = () => ask(b.textContent));
+function showWelcome() {
+  const groups = EXAMPLES.map(g => `<div class="ex-group"><div class="g">${esc(g.group)}</div>
+      ${g.questions.map(q => `<button class="ex">${esc(q)}</button>`).join("")}</div>`).join("");
+  $("thread").innerHTML = `<div class="welcome"><h2>有什么可以帮您？</h2>
+    <div>回答只依据知识库中的资料，并标注出处；可以询问金融产品、公司公告、宏观政策、金融知识和业务流程</div>
+    <div class="examples">${groups}</div></div>`;
+  document.querySelectorAll(".welcome .ex").forEach(b => b.onclick = () => ask(b.textContent));
 }
 
-function newChat() { sessionId = null; showEmpty(); highlightSession(); $("input").focus(); }
+function newChat() {
+  if (busy) return;
+  sessionId = null; $("chatTitle").textContent = "新对话"; banner("");
+  showWelcome(); highlightSession(); showView("chat");
+}
+
+// ---------------- 问答：历史会话 ----------------
+
+function dateGroup(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "更早";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.floor((today - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (days <= 0) return "今天";
+  if (days === 1) return "昨天";
+  if (days < 7) return "近 7 天";
+  return "更早";
+}
 
 function highlightSession() {
   document.querySelectorAll(".session").forEach(el => el.classList.toggle("active", el.dataset.id === sessionId));
+  const current = sessions.find(s => s.session_id === sessionId);
+  if (current) $("chatTitle").textContent = current.title || "（无标题）";
 }
 
 async function loadSessions() {
   try {
     const resp = await fetch("/sessions");
     if (!resp.ok) throw new Error();
-    const {sessions} = await resp.json();
-    $("sessionList").innerHTML = sessions.map(s => `<div class="session" data-id="${esc(s.session_id)}">
-        <div class="t">${esc(s.title || "（无标题）")}</div><div class="d">${esc(localTime(s.updated_at))}</div></div>`).join("")
-        || `<div class="sub">暂无历史会话</div>`;
+    sessions = (await resp.json()).sessions || [];
+    let html = "", group = "";
+    for (const s of sessions) {
+      const g = dateGroup(s.updated_at);
+      if (g !== group) { html += `<div class="group-label">${g}</div>`; group = g; }
+      html += `<div class="session" data-id="${esc(s.session_id)}"><div class="t">${esc(s.title || "（无标题）")}</div>
+               <div class="d">${esc(localTime(s.updated_at))}</div></div>`;
+    }
+    $("sessionList").innerHTML = html || `<div class="side-empty">暂无历史会话</div>`;
     document.querySelectorAll(".session").forEach(el => el.onclick = () => openSession(el.dataset.id));
     highlightSession();
   } catch { banner("历史会话加载失败：无法连接查询服务。"); }
@@ -302,21 +608,166 @@ async function openSession(id) {
       if (m.role === "user") { lastQuestion = m.text; addUser(m.text); }
       else fillAssistant(addAssistant(lastQuestion), {text: m.text, kind: m.kind, sources: m.sources});
     }
-    highlightSession(); $("sidebar").classList.remove("open");
+    highlightSession(); showView("chat"); scrollBottom();
   } catch { banner("会话记录加载失败，请稍后重试。"); }
+}
+
+// ---------------- 资料导入 ----------------
+
+function renderFlow() {
+  $("flow").innerHTML = NODES.map((n, i) => `<div class="node"><b>${i + 1}. ${n.label}</b><code>${n.id}</code><div>${n.desc}</div></div>`).join("");
+}
+
+function importNotice(text, level) {
+  const box = $("importNotice");
+  box.textContent = text || ""; box.className = level || ""; box.hidden = !text;
+}
+
+async function uploadFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  const form = new FormData();
+  files.forEach(f => form.append("files", f));
+  importNotice(`正在上传 ${files.length} 个文件…`, "ok");
+  try {
+    const resp = await fetch(`${IMPORT_API}/documents`, {method: "POST", body: form});
+    if (!resp.ok) throw new Error(`上传失败（HTTP ${resp.status}）`);
+    const results = (await resp.json()).files || [];
+    const accepted = results.filter(r => r.accepted);
+    const rejected = results.filter(r => !r.accepted);
+    const parts = [];
+    if (accepted.length) parts.push(`已提交 ${accepted.length} 个文件，正在后台导入`);
+    if (rejected.length) parts.push(rejected.map(r => `${r.file_name}：${r.reason}`).join("；"));
+    importNotice(parts.join("。"), rejected.length ? "error" : "ok");
+    await loadTasks();
+  } catch (e) {
+    importNotice(e instanceof TypeError ? "无法连接服务，请确认查询服务已启动。" : e.message, "error");
+  } finally {
+    $("fileInput").value = "";
+  }
+}
+
+function taskView(t) {
+  const pending = NODES.findIndex(n => !t.done_nodes.includes(n.id));
+  const steps = NODES.map((n, i) => {
+    let cls = "", time = "";
+    if (t.done_nodes.includes(n.id)) { cls = "done"; time = fmtSeconds(t.node_seconds[n.id]); }
+    else if (i === pending && t.status === "running") { cls = "run"; time = fmtSeconds(t.running_seconds); }
+    else if (i === pending && t.status === "failed") { cls = "fail"; time = "失败"; }
+    else if (t.status === "done" && t.action === "skip") time = "跳过";
+    return `<li class="step ${cls}"><span class="bullet"></span>${n.label}<span class="tm">${time}</span></li>`;
+  }).join("");
+  const total = Object.values(t.node_seconds).reduce((a, b) => a + b, 0);
+  let status, note = "", noteClass = "";
+  if (t.status === "queued") { status = `<span class="status">排队中</span>`; note = "等待前一个文件导入完成"; }
+  else if (t.status === "running") { status = `<span class="status run">导入中 · ${NODES[pending] ? NODES[pending].label : ""}</span>`; }
+  else if (t.status === "failed") { status = `<span class="status fail">失败</span>`; note = t.error || "导入失败"; noteClass = "fail"; }
+  else if (t.action === "skip") { status = `<span class="status skip">已跳过</span>`; note = `内容与已导入的版本相同，未重复处理（${t.chunk_count ?? "—"} 个切片）`; }
+  else { status = `<span class="status ok">${t.action === "redo" ? "已重新导入" : "已导入"}</span>`; note = `已就绪：${t.chunk_count ?? "—"} 个切片，共用时 ${fmtSeconds(total)}`; }
+  return `<div class="task"><div class="task-head"><span class="fn" title="${esc(t.file_name)}">${esc(t.file_name)}</span>${status}</div>
+          <ol class="steps">${steps}</ol>${note ? `<div class="task-note ${noteClass}">${esc(note)}</div>` : ""}</div>`;
+}
+
+function renderTasks() {
+  $("taskPanel").hidden = !tasks.length;
+  $("taskList").innerHTML = tasks.map(taskView).join("");
+  $("navDot").hidden = !tasks.some(t => ACTIVE.includes(t.status));
+}
+
+async function loadTasks() {
+  clearTimeout(pollTimer);
+  try {
+    const resp = await fetch(`${IMPORT_API}/tasks`);
+    if (!resp.ok) throw new Error();
+    tasks = (await resp.json()).tasks || [];
+    renderTasks();
+    // 任务推进到新节点或结束时，文档状态随之变化，顺带刷新文档列表
+    const signature = tasks.map(t => `${t.task_id}:${t.status}:${t.done_nodes.length}`).join(",");
+    if (signature !== taskSignature) { taskSignature = signature; loadDocuments(); }
+  } catch { /* 服务不可达时下一轮再试 */ }
+  if (tasks.some(t => ACTIVE.includes(t.status))) pollTimer = setTimeout(loadTasks, 1500);
+}
+
+function renderStats() {
+  const ready = documents.filter(d => d.status === "ready");
+  const chunks = ready.reduce((a, d) => a + (d.chunk_count || 0), 0);
+  const text = `知识库 ${ready.length} 份资料 · ${chunks} 个切片`;
+  document.querySelectorAll(".kb-pill").forEach(el => { el.textContent = text; });
+}
+
+function renderDocs() {
+  const counts = {all: documents.length, ready: 0, running: 0, failed: 0};
+  documents.forEach(d => { if (d.status in counts) counts[d.status]++; });
+  const labels = {all: "全部", ready: "就绪", running: "导入中", failed: "失败"};
+  $("docStatus").innerHTML = Object.keys(labels).filter(k => k === "all" || counts[k])
+    .map(k => `<button data-status="${k}" class="${k === docStatusFilter ? "active" : ""}">${labels[k]} ${counts[k]}</button>`).join("");
+  $("docStatus").querySelectorAll("button").forEach(b => b.onclick = () => { docStatusFilter = b.dataset.status; renderDocs(); });
+
+  const keyword = $("docSearch").value.trim().toLowerCase();
+  const rows = documents.filter(d => docStatusFilter === "all" || d.status === docStatusFilter)
+    .filter(d => !keyword || `${d.document_title || ""} ${d.file_name || ""}`.toLowerCase().includes(keyword));
+  $("docBody").innerHTML = rows.map(d => {
+    const [label, cls] = DOC_STATUS[d.status] || [d.status || "未知", ""];
+    const err = d.status === "failed" && d.error ? `<div class="doc-err" title="${esc(d.error)}">${esc(d.error.slice(0, 120))}</div>` : "";
+    const link = d.source_path ? `<a href="${esc(d.source_path)}" target="_blank" rel="noopener">原件</a>` : "";
+    return `<tr><td><div class="doc-title">${esc(d.document_title || d.file_name)}</div><div class="doc-file">${esc(d.file_name)}</div></td>
+      <td class="nowrap">${esc(d.content_type || "")}</td><td class="num">${d.page_count ?? "—"}</td><td class="num">${d.chunk_count ?? "—"}</td>
+      <td><span class="status ${cls}">${label}</span>${err}</td><td class="nowrap">${esc(localTime(d.updated_at))}</td><td>${link}</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty-cell">${documents.length ? "没有符合条件的文档" : "知识库还没有文档，拖入文件开始导入"}</td></tr>`;
+}
+
+async function loadDocuments() {
+  try {
+    const resp = await fetch(`${IMPORT_API}/documents`);
+    if (!resp.ok) throw new Error();
+    documents = (await resp.json()).documents || [];
+    renderStats(); renderDocs();
+  } catch {
+    $("docBody").innerHTML = `<tr><td colspan="7" class="empty-cell">文档列表加载失败：无法连接服务。</td></tr>`;
+  }
+}
+
+// ---------------- 事件绑定 ----------------
+
+function autoGrow() {
+  const input = $("input");
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight + 2, 160) + "px";
+  const n = input.value.length;
+  $("counter").textContent = n > MAX_CHARS * 0.8 ? `${n} / ${MAX_CHARS}` : "";
+  $("counter").classList.toggle("over", n >= MAX_CHARS);
 }
 
 $("send").onclick = () => {
   if (busy || !$("input").value.trim()) return;  // 上一条回答未结束时保留输入内容
-  const q = $("input").value; $("input").value = ""; ask(q);
+  const q = $("input").value; $("input").value = ""; autoGrow(); ask(q);
 };
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("send").click(); }
 });
+$("input").addEventListener("input", autoGrow);
 $("newChat").onclick = newChat;
-$("menu").onclick = () => $("sidebar").classList.toggle("open");
-showEmpty();
+document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
+document.querySelectorAll(".menu").forEach(b => b.onclick = () => $("sidebar").classList.add("open"));
+$("scrim").onclick = () => $("sidebar").classList.remove("open");
+
+$("drop").onclick = () => $("fileInput").click();
+$("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); } };
+$("fileInput").onchange = (e) => uploadFiles(e.target.files);
+$("drop").addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", (e) => { e.preventDefault(); $("drop").classList.remove("over"); uploadFiles(e.dataTransfer.files); });
+// 文件拖到放置区以外时不让浏览器直接打开它
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => e.preventDefault());
+$("docSearch").addEventListener("input", renderDocs);
+
+renderFlow();
+showWelcome();
+showView(location.hash === "#import" ? "import" : "chat");
 loadSessions();
+loadDocuments();
+loadTasks();
 </script>
 </body>
 </html>

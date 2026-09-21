@@ -51,11 +51,13 @@ def new_task_id() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
 
-def import_file(path: Path, root=None, task_id: str = "", force: bool = False, reparse: bool = False) -> dict:
+def import_file(path: Path, root=None, task_id: str = "", force: bool = False, reparse: bool = False,
+                on_node=None) -> dict:
     """
     导入单个文件
     :param path: 文件路径
     :param root: 导入目录（计算相对目录、判定内容类型），默认为文件所在目录
+    :param on_node: 可选回调 on_node(节点名, 节点返回的状态)，每个节点跑完调用一次（导入页面据此显示进度）
     :return: 图的最终状态；失败时把文档标记为 failed 后抛出异常
     """
     if not task_id:
@@ -70,7 +72,14 @@ def import_file(path: Path, root=None, task_id: str = "", force: bool = False, r
         reparse=reparse,
     )
     try:
-        return kb_import_app.invoke(state)
+        final = state
+        for mode, chunk in kb_import_app.stream(state, stream_mode=["updates", "values"]):
+            if mode == "values":
+                final = chunk
+            elif on_node is not None:
+                for node_name, node_state in chunk.items():
+                    on_node(node_name, node_state)
+        return final
     except Exception as e:
         # 节点内不做失败处理，统一在这里记进 documents.error；doc_id 由文件内容决定，重算一次即可
         mark_failed(build_doc_id(get_file_sha256(path)), path.name, e)

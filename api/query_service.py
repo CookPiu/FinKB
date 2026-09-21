@@ -1,5 +1,5 @@
 """
-查询服务：聊天页面、流式问答（SSE）、历史会话。
+查询服务：页面（问答 + 资料导入）、流式问答（SSE）、历史会话；导入服务的接口挂在 /import 下。
 启动：uv run python -m api.query_service（或 uv run uvicorn api.query_service:app --port 8001）
 """
 import uuid
@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.file_import_service import app as import_app
 from common.logging.logger import logger
 from processor.query_processor.main_graph import query_app
 from processor.query_processor.state import create_query_default_state
@@ -37,6 +38,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FinKB 查询服务", description="金融知识库问答", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# 页面的“资料导入”走 /import/documents、/import/tasks；与问答同进程，BGE-M3 只加载一份
+app.mount("/import", import_app)
 
 
 class QueryRequest(BaseModel):
