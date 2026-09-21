@@ -42,6 +42,17 @@ def test_index_matches_documents():
         assert chunk_ids == expected, d["file_name"]
 
 
+def test_ready_documents_have_entity():
+    """每个就绪文档都记着导入时识别出的对象，汇总出的实体覆盖全部就绪文档"""
+    from utils.clients.mongo_utils import get_db
+    from utils.entity_utils import get_entities
+
+    ready = list(get_db().documents.find({"status": "ready"}, {"file_name": 1, "entity": 1}))
+    assert [d["file_name"] for d in ready if not d.get("entity")] == []
+    covered = {doc_id for entity in get_entities() for doc_id in entity["doc_ids"]}
+    assert covered == {d["_id"] for d in ready}
+
+
 def test_hybrid_search_returns_maotai_revenue_table():
     from utils.search_utils import semantic_search
 

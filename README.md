@@ -16,7 +16,7 @@
 - **六种回答类型**：依据资料回答、资料不足时拒答、对象有歧义时请用户确认、不提供投资建议、提示非实时数据、寒暄。
 - **合规**：禁用表达（保本保收益、稳赚不赔等）按句拦截，能识别“不承诺保本”这类否定说法和“以保本为诱饵”这类描述骗局的语境；涉及基金理财时追加风险提示，问到最新行情时追加时效提示。
 - **多轮对话**：追问可以省略对象（“它的现金流呢”）；需要确认对象时，直接点候选或回复“第一个”“债券那只”。
-- **资料导入**：在页面上拖入文件，实时显示登记、解析、切分、索引四个步骤的进度；也可以用命令行批量导入整个目录。内容没变的文件自动跳过，同名文件的新版本会替换旧文档。
+- **资料导入**：在页面上拖入文件，实时显示登记、解析、切分、索引四个步骤的进度；也可以用命令行批量导入整个目录。内容没变的文件自动跳过，同名文件的新版本会替换旧文档。导入时自动识别资料讲的是哪家公司、哪只基金或理财产品，不用手工维护实体表。
 
 ## 架构
 
@@ -28,7 +28,7 @@
 |---|---|---|
 | node_entry | 按文件哈希判定新增、重做或跳过；删除同名旧版本；原件上传 MinIO | Mongo `documents` 记录 |
 | node_parse | pdf / Word / PowerPoint 提交 MinerU 解析，md 本地解析；结果按文件哈希缓存 | `content_list.json` |
-| node_chunk | 丢弃页眉页码、推断标题层级、合并跨页段落和表格、描述图片；产出正文、表格、图表描述、财务指标、文档摘要五类切片 | `chunks.json` |
+| node_chunk | 丢弃页眉页码、推断标题层级、合并跨页段落和表格、描述图片；产出正文、表格、图表描述、财务指标、文档摘要五类切片；识别文档讲的对象（全称、代码、简称），只保留原文里找得到依据的字段 | `chunks.json`、`documents.entity` |
 | node_index | BGE-M3 计算稠密和稀疏向量，写入后清掉该文档的旧切片，文档置为就绪 | Milvus `fin_chunks` |
 
 **查询图**：`node_query_plan → node_gather_evidence → node_answer_output`，节点通过 SSE 流式推送。
@@ -36,7 +36,7 @@
 | 节点 | 做什么 |
 |---|---|
 | node_query_plan | 结合对话历史，把问题改写成完整的独立问题，并抽取提到的对象；上一轮在等用户确认对象时，按序号或名称直接匹配候选，不调用模型 |
-| node_gather_evidence | 把提到的对象对应到实体表；稠密和稀疏混合检索取 20 条（Milvus 内置 RRF 融合，问题指向具体对象时只在其文档内检索），`qwen3-rerank` 精排取 8 条，编号 E1～E8 |
+| node_gather_evidence | 把提到的对象对应到实体（查询时由各文档的对象汇总而来，代码有交集或全称相同的文档归为同一个实体）；稠密和稀疏混合检索取 20 条（Milvus 内置 RRF 融合，问题指向具体对象时只在其文档内检索），`qwen3-rerank` 精排取 8 条，编号 E1～E8 |
 | node_answer_output | 模型按 [规则手册](common/prompt/answer_system.prompt) 一次输出回答类型和正文；代码负责三道闸门：禁用表达按句拦截、删掉证据里不存在的引用编号、一条证据都没有时直接输出固定拒答话术；最后追加提示语、生成来源列表、写入会话 |
 
 设计要点：
@@ -69,7 +69,6 @@ processor/                import_processor/  query_processor/（各有 state.py�
 utils/                    clients/（Milvus、Mongo、MinIO、MinerU、会话）  lm/（对话、BGE-M3、精排）  其他工具函数
 common/                   config/（每个组件一个配置文件）  logging/  prompt/*.prompt  answer_templates.py（固定话术）
 evaluation/               评测集自检、检索评测、答案评测
-data/entities.json        实体表（手写）
 data/eval/                评测集 fin_eval_set.jsonl 与评测结果 results/
 tests/                    unit/  integration/
 ```
@@ -90,6 +89,7 @@ uv run python -m api.query_service                  # 启动服务，打开 http
 
 ```bash
 uv run python cli.py status                         # 各文档的导入状态
+uv run python cli.py entities                       # 各文档识别出的对象汇总成的实体；--extract 对已导入文档重新识别
 uv run python cli.py search "茅台一季度营业收入"     # 调试检索，可用 --kind / --content-type 过滤
 uv run python cli.py ask "华夏债券C的托管费是多少？"  # 命令行问答；不带问题进入多轮交互，--session <id> 接着已有会话问
 ```
@@ -121,7 +121,7 @@ uv run pytest -m integration                               # 集成测试，需�
 uv run python -m evaluation.runner --tag <标签> --mode answer  # 评测；默认只评检索，--mode answer 走完整问答链路
 ```
 
-当前结果（`data/eval/results/2026-09-20_simplify-batch4-answer.json`）：
+当前结果（`data/eval/results/2026-09-21_entity-auto3.json`）：
 
 | 指标 | 结果 |
 |---|---|
@@ -131,7 +131,7 @@ uv run python -m evaluation.runner --tag <标签> --mode answer  # 评测；默�
 | 必含内容通过率 | 0.96 |
 | 多轮对话 | 4 / 4 |
 | 证据中包含标准原句 / 引用的文件包含标准文件 | 0.98 / 1.0 |
-| 单次问答耗时：中位数 / p90 | 3.5 s / 5.8 s |
+| 单次问答耗时：中位数 / p90 | 2.9 s / 4.8 s |
 
 只评检索（混合检索，不含精排）时，切片级 Hit@5 为 0.84、MRR@10 为 0.66，文档级 Hit@5 为 1.0。
 
@@ -142,4 +142,5 @@ uv run python -m evaluation.runner --tag <标签> --mode answer  # 评测；默�
 - MinerU（vlm 模式）偶尔漏识别正文里的数字：招商银行季报有少数正文数字缺失；《基金基础知识》用的是伪粗体排版，数字识别率很低。表格里的数值不受影响。
 - 个别产品费率题检索不到对应的费用表，例如易方达智造 C 的销售服务费。
 - 回答类型由模型判断，温度设为 0 也会有波动，个别题的归类可能因此变化。
+- 对象的简称由模型在导入时生成，覆盖不全：用银行名指代其理财产品（如“中行那款理财”）这类说法可能对不上，会按库外对象处理；只说品牌（如“易方达基金”）而库里只有一只该品牌的产品时，会直接对应到这一只。
 - 导入主要耗时在 CPU 上计算向量，导入任务串行执行。导入进度只保存在服务内存里，重启后清空，但文档状态不受影响。

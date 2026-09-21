@@ -28,7 +28,7 @@ def get_db():
 
 def get_documents_by_file():
     """
-    文件名 → 文档元数据（资料名称、内容类型、原件地址），供实体过滤与证据溯源使用
+    文件名 → 文档元数据（资料名称、内容类型、原件地址），供证据溯源使用
     :return: {file_name: {"_id", "file_name", "document_title", "content_type", "source_path"}}
     """
     fields = {"file_name": 1, "document_title": 1, "content_type": 1, "source_path": 1}
@@ -36,6 +36,15 @@ def get_documents_by_file():
     for doc in get_db().documents.find({}, fields):
         documents[doc["file_name"]] = doc
     return documents
+
+
+def get_document_entities():
+    """
+    已就绪文档上记录的对象（导入时由 node_chunk 识别），供实体解析汇总使用
+    :return: [{"_id", "entity"}]，按文件名排序；status 取值见 utils/task_utils.py 的 STATUS_READY
+    """
+    fields = {"entity": 1}
+    return list(get_db().documents.find({"status": "ready", "entity": {"$ne": None}}, fields).sort("file_name", 1))
 
 
 def ensure_indexes():

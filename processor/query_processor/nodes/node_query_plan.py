@@ -78,7 +78,7 @@ def build_clarified_plan(pending_plan: dict, chosen: dict) -> dict:
 
 
 def get_focus_names(focus_entity_ids: list) -> list:
-    """焦点对象的名称（实体表里已不存在的 ID 跳过）"""
+    """焦点对象的名称（对应文档已删除、实体已不存在的 ID 跳过）"""
     entity_map = get_entity_map()
     return [entity_map[i]["name"] for i in focus_entity_ids if i in entity_map]
 

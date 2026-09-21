@@ -9,18 +9,23 @@
 - 图片描述 image_desc：derived=true；
 - 财务指标事实 fact：只对公司定期报告，"主要会计数据"表的一行一条；
 - 文档摘要 summary：每份文档一条，取前 SUMMARY_INPUT_CHARS 字正文调一次 LLM。
+另外取开头 ENTITY_INPUT_CHARS 字再调一次 LLM，识别文档讲的对象（公司、基金、理财产品，或不针对具体对象），
+校验后写入 documents.entity；查询时由 utils/entity_utils.py 从各文档的对象汇总出实体列表。
 
-切片 chunk 是 dict，字段见 new_chunk；chunks.json 写出全部字段，是本节点唯一的产物。
+切片 chunk 是 dict，字段见 new_chunk；chunks.json 写出全部字段。
 """
+import json
 import re
 
 from common.logging.logger import logger, node_log, step_log
 from processor.import_processor.state import ImportGraphState
-from utils.artifact_utils import CHUNKS, CONTENT_LIST, get_doc_dir, write_json
+from utils.artifact_utils import CHUNKS, CONTENT_LIST, get_doc_dir, read_json, write_json
 from utils.block_utils import build_fact_text, extract_facts, get_last_page, group_facts, normalize_document
+from utils.entity_utils import ground_entity
 from utils.lm.lm_utils import chat
 from utils.load_prompt import load_prompt
 from utils.table_html_utils import get_unit_hint, linearize_rows, parse_table, split_rows, to_markdown
+from utils.task_utils import save_doc_fields
 
 # 切分参数（评测结果里会记录）
 CHUNK_TARGET_CHARS = 600  # 正文切片目标长度，缓冲累积到该长度即断开
@@ -28,6 +33,7 @@ CHUNK_MAX_CHARS = 1000  # 正文切片上限
 CHUNK_MIN_CHARS = 200  # 缓冲不足该长度时跨小节、跨表格继续累积，避免碎片切片
 TABLE_MAX_CHARS = 3000  # 表格线性化文本上限，超过时按行拆成多段
 SUMMARY_INPUT_CHARS = 6000  # 生成摘要时喂给模型的正文长度
+ENTITY_INPUT_CHARS = 3000  # 识别文档对象时喂给模型的开头文本长度（代码多在开头的表格里）
 COMPANY_REPORT = "公司定期报告"  # 只有这类文档抽取财务指标事实
 SUMMARY_PREFIX = "（文档摘要）"
 
@@ -263,6 +269,42 @@ def build_summary_chunk(doc: dict, chunks: list) -> dict:
     return new_chunk("summary", SUMMARY_PREFIX + summary, summary, "", 0, 0)
 
 
+def build_entity_input(doc_id: str, chunks: list) -> str:
+    """
+    前两页的页眉（证券代码常印在封面页眉里，切片时页眉已丢弃）+ 按顺序的正文与表格切片，截断到 ENTITY_INPUT_CHARS 字
+    """
+    parts = []
+    for block in read_json(get_doc_dir(doc_id) / CONTENT_LIST):
+        if block.get("type") == "header" and block.get("page_idx", 0) < 2 and block.get("text", "").strip():
+            if block["text"].strip() not in parts:
+                parts.append(block["text"].strip())
+    size = sum(len(p) for p in parts)
+    for c in chunks:
+        if c["kind"] not in ("text", "table"):
+            continue
+        parts.append(c["text"])
+        size += len(c["text"])
+        if size >= ENTITY_INPUT_CHARS:
+            break
+    return "\n".join(parts)[:ENTITY_INPUT_CHARS]
+
+
+@step_log("extract_entity")
+def extract_entity(doc: dict, chunks: list) -> dict:
+    """
+    调用 LLM 识别文档讲的对象，经 ground_entity 校验后返回
+    :return: {"type", "name", "codes", "aliases"}；模型输出无法解析时按不针对具体对象的资料处理
+    """
+    text = build_entity_input(doc["doc_id"], chunks)
+    prompt = load_prompt("doc_entity", title=doc["document_title"], content_type=doc["content_type"], text=text)
+    raw = {}
+    try:
+        raw = json.loads(chat([{"role": "user", "content": prompt}], json_mode=True))
+    except ValueError as e:
+        logger.warning(f"{doc['file_name']} 的对象识别结果无法解析：{e}")
+    return ground_entity(raw, text, doc["document_title"])
+
+
 # ---------- 节点 ----------
 
 @step_log("validate_and_get_data")
@@ -286,7 +328,8 @@ def validate_and_get_data(state: ImportGraphState):
 @node_log("node_chunk")
 def node_chunk(state: ImportGraphState):
     """
-    节点功能：把解析结果整理成版面块，切成检索切片，连同财务事实与文档摘要一起写出 chunks.json。
+    节点功能：把解析结果整理成版面块，切成检索切片，连同财务事实与文档摘要一起写出 chunks.json；
+    识别文档讲的对象写入 documents.entity。
     上游 node_parse 产出 content_list.json；下游 node_index 编码入库。
     """
     doc = validate_and_get_data(state)
@@ -299,6 +342,9 @@ def chunk_document(doc: dict) -> int:
     """切一个文档：content_list.json → 版面块 → 正文/表格/图片 + 事实 + 摘要 → chunks.json，返回切片数"""
     blocks = normalize_document(doc["doc_id"])
     chunks = build_chunks(blocks, CHUNK_TARGET_CHARS, CHUNK_MAX_CHARS, CHUNK_MIN_CHARS, TABLE_MAX_CHARS)
+    entity = extract_entity(doc, chunks)
+    save_doc_fields(doc, {"entity": entity})
+    logger.info(f"entity    {doc['file_name']}：[{entity['type']}] {entity['name']} {entity['codes']} {entity['aliases']}")
     if doc["content_type"] == COMPANY_REPORT:
         chunks.extend(build_fact_chunks(blocks))
     chunks.append(build_summary_chunk(doc, chunks))

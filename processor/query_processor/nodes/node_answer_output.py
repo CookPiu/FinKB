@@ -112,7 +112,9 @@ def build_entity_note(state: QueryGraphState) -> str:
     """把代码解析出的对象情况告诉模型"""
     lines = []
     if state.get("candidate_names"):
-        lines.append("候选对象（问题指向不明确，需要请用户确认）：" + "、".join(state["candidate_names"]))
+        # 候选名称是资料里的全称，可能很长；写明按 clarify 格式列出，避免模型把这段说明原样抄进正文
+        options = "\n".join(f"{i}. {name}" for i, name in enumerate(state["candidate_names"], 1))
+        lines.append(f"问题指向的对象不明确，可能是下面几个（需要请用户确认时，按 clarify 的格式列出，不要照抄这段说明）：\n{options}")
     if state.get("unknown_mentions"):
         lines.append("以下对象不在知识库中：" + "、".join(state["unknown_mentions"]))
     return "\n".join(lines)

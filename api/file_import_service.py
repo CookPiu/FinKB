@@ -132,7 +132,7 @@ def tasks():
 @app.get("/documents", summary="文档与导入状态")
 def list_documents():
     fields = {"_id": 1, "file_name": 1, "document_title": 1, "content_type": 1, "status": 1, "chunk_count": 1,
-              "page_count": 1, "error": 1, "source_path": 1, "updated_at": 1}
+              "page_count": 1, "error": 1, "source_path": 1, "updated_at": 1, "entity": 1}
     docs = get_db().documents.find({}, fields).sort("file_name", 1)
     documents = []
     for doc in docs:

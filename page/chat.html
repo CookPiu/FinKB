@@ -695,6 +695,13 @@ function renderStats() {
   document.querySelectorAll(".kb-pill").forEach(el => { el.textContent = text; });
 }
 
+// 导入时识别出的对象（公司、基金、理财产品）；不针对具体对象的资料不显示
+function entityText(d) {
+  const e = d.entity;
+  if (!e || e.type === "document") return "";
+  return e.codes && e.codes.length ? `${e.name}（${e.codes.join("、")}）` : e.name;
+}
+
 function renderDocs() {
   const counts = {all: documents.length, ready: 0, running: 0, failed: 0};
   documents.forEach(d => { if (d.status in counts) counts[d.status]++; });
@@ -705,12 +712,13 @@ function renderDocs() {
 
   const keyword = $("docSearch").value.trim().toLowerCase();
   const rows = documents.filter(d => docStatusFilter === "all" || d.status === docStatusFilter)
-    .filter(d => !keyword || `${d.document_title || ""} ${d.file_name || ""}`.toLowerCase().includes(keyword));
+    .filter(d => !keyword || `${d.document_title || ""} ${d.file_name || ""} ${entityText(d)}`.toLowerCase().includes(keyword));
   $("docBody").innerHTML = rows.map(d => {
     const [label, cls] = DOC_STATUS[d.status] || [d.status || "未知", ""];
     const err = d.status === "failed" && d.error ? `<div class="doc-err" title="${esc(d.error)}">${esc(d.error.slice(0, 120))}</div>` : "";
     const link = d.source_path ? `<a href="${esc(d.source_path)}" target="_blank" rel="noopener">原件</a>` : "";
-    return `<tr><td><div class="doc-title">${esc(d.document_title || d.file_name)}</div><div class="doc-file">${esc(d.file_name)}</div></td>
+    const entity = entityText(d) ? `<div class="doc-file">对象：${esc(entityText(d))}</div>` : "";
+    return `<tr><td><div class="doc-title">${esc(d.document_title || d.file_name)}</div><div class="doc-file">${esc(d.file_name)}</div>${entity}</td>
       <td class="nowrap">${esc(d.content_type || "")}</td><td class="num">${d.page_count ?? "—"}</td><td class="num">${d.chunk_count ?? "—"}</td>
       <td><span class="status ${cls}">${label}</span>${err}</td><td class="nowrap">${esc(localTime(d.updated_at))}</td><td>${link}</td></tr>`;
   }).join("") || `<tr><td colspan="7" class="empty-cell">${documents.length ? "没有符合条件的文档" : "知识库还没有文档，拖入文件开始导入"}</td></tr>`;

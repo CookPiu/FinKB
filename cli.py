@@ -143,6 +143,30 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_entities(args: argparse.Namespace) -> int:
+    from utils.entity_utils import get_entities
+
+    if args.extract:
+        # 已就绪文档重新识别对象：读 chunks.json 调一次 LLM，不重新切片、不重新向量化
+        from processor.import_processor.nodes.node_chunk import extract_entity
+        from utils.artifact_utils import CHUNKS, get_doc_dir, read_json
+        from utils.clients.mongo_utils import get_db
+        from utils.task_utils import STATUS_READY, save_doc_fields
+
+        for doc in get_db().documents.find({"status": STATUS_READY}).sort("file_name", 1):
+            entity = extract_entity(doc, read_json(get_doc_dir(doc["_id"]) / CHUNKS))
+            save_doc_fields(doc, {"entity": entity})
+            print(f"识别 {doc['file_name']} → [{entity['type']}] {entity['name']}")
+        print()
+
+    entities = get_entities()
+    for entity in entities:
+        print(f"{entity['id']}  [{entity['type']}] {entity['name']}  文档 {len(entity['doc_ids'])} 份")
+        print(f"    代码：{'、'.join(entity['codes']) or '—'}  别名：{'、'.join(entity['aliases']) or '—'}")
+    print(f"共 {len(entities)} 个实体")
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     from utils.search_utils import semantic_search
 
@@ -221,6 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("status", help="查看文档导入状态")
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("entities", help="查看从各文档识别出的对象汇总成的实体")
+    p.add_argument("--extract", action="store_true", help="先对已就绪文档重新识别对象（不重新向量化）")
+    p.set_defaults(func=cmd_entities)
 
     p = sub.add_parser("search", help="语义检索调试（稠密 + 稀疏，RRF 融合）")
     p.add_argument("query")

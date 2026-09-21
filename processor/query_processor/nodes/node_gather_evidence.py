@@ -9,7 +9,7 @@ from common.answer_templates import REFUSE
 from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
 from utils.clients.mongo_utils import get_documents_by_file
-from utils.entity_utils import get_entities, get_entity_map, resolve_mentions
+from utils.entity_utils import get_entity_map, resolve_mentions
 from utils.lm.reranker_utils import rerank
 from utils.search_utils import semantic_search
 
@@ -41,20 +41,21 @@ def node_gather_evidence(state: QueryGraphState):
     澄清候选与库外对象只记录下来交给回答节点参考，不在这里决定走向。
     """
     standalone_query, mentions = validate_and_get_data(state)
+    entity_map = get_entity_map()
     if state.get("clarified"):
         # 上一轮澄清已由 node_query_plan 用代码确定对象
         entity_ids = state.get("entity_ids", [])
         candidates = []
         unknown_mentions = []
     else:
-        resolution = resolve_mentions(mentions, get_entities())
+        resolution = resolve_mentions(mentions, list(entity_map.values()))
         entity_ids = [entity["id"] for entity in resolution["entities"]]
         candidates = resolution["candidates"]
         unknown_mentions = resolution["unknown_mentions"]
-    doc_ids = get_doc_ids(entity_ids)
+    doc_ids = get_doc_ids(entity_ids, entity_map)
     logger.info(f"entities={entity_ids} candidates={[e['id'] for e in candidates]} unknown={unknown_mentions}")
 
-    evidence = gather_evidence(standalone_query, entity_ids, doc_ids)
+    evidence = gather_evidence(standalone_query, doc_ids, get_entity_of_doc(entity_ids, entity_map))
     state["entity_ids"] = entity_ids
     state["candidate_ids"] = [entity["id"] for entity in candidates]
     state["candidate_names"] = [entity["name"] for entity in candidates]
@@ -70,14 +71,14 @@ def node_gather_evidence(state: QueryGraphState):
 
 
 @step_log("gather_evidence")
-def gather_evidence(standalone_query: str, entity_ids: list, doc_ids: list) -> list:
+def gather_evidence(standalone_query: str, doc_ids: list, entity_of_doc: dict) -> list:
     """
     检索、精排并编号
+    :param doc_ids: 限定检索的文档，为空时全库检索
+    :param entity_of_doc: doc_id → 该文档所属的已确认实体，用于给证据标注实体名与代码
     :return: 证据列表（键见 utils/citation_utils.py）
     """
-    docs = get_documents_by_file()
-    doc_meta = get_doc_meta_by_id(docs)
-    entity_of_doc = get_entity_of_doc(entity_ids, docs)
+    doc_meta = get_doc_meta_by_id(get_documents_by_file())
 
     hits = semantic_search(standalone_query, top_k=TOP_K, candidates=CANDIDATES, doc_ids=doc_ids or None)
     evidence = []
@@ -91,15 +92,12 @@ def gather_evidence(standalone_query: str, entity_ids: list, doc_ids: list) -> l
 
 # ---------- 对象与文档 ----------
 
-def get_doc_ids(entity_ids: list) -> list:
-    """实体对应的文档 ID（按实体表里的文件名到 documents 查找，未导入的文件跳过）"""
-    docs = get_documents_by_file()
-    entity_map = get_entity_map()
+def get_doc_ids(entity_ids: list, entity_map: dict) -> list:
+    """实体对应的文档 ID（会话里记着、但文档已删除的实体跳过）"""
     doc_ids = []
     for entity_id in entity_ids:
-        for file_name in entity_map[entity_id]["files"]:
-            if file_name in docs:
-                doc_ids.append(docs[file_name]["_id"])
+        if entity_id in entity_map:
+            doc_ids.extend(entity_map[entity_id]["doc_ids"])
     return doc_ids
 
 
@@ -111,15 +109,14 @@ def get_doc_meta_by_id(docs: dict) -> dict:
     return doc_meta
 
 
-def get_entity_of_doc(entity_ids: list, docs: dict) -> dict:
+def get_entity_of_doc(entity_ids: list, entity_map: dict) -> dict:
     """doc_id → 该文档所属的实体（只含本轮已确认的实体）"""
-    entity_map = get_entity_map()
     entity_of_doc = {}
     for entity_id in entity_ids:
-        entity = entity_map[entity_id]
-        for file_name in entity["files"]:
-            if file_name in docs:
-                entity_of_doc[docs[file_name]["_id"]] = entity
+        if entity_id not in entity_map:
+            continue
+        for doc_id in entity_map[entity_id]["doc_ids"]:
+            entity_of_doc[doc_id] = entity_map[entity_id]
     return entity_of_doc
 
 
