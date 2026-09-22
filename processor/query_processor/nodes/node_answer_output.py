@@ -4,6 +4,8 @@
 写在正文之后的 <<<META>>> 行里。代码只做三件事：禁语兜底、引用校验、按标记追加固定提示语。
 上游已经短路成固定拒答（一条证据都没有）时，本节点不调用模型。
 """
+from datetime import date
+
 from common.answer_templates import (
     CHITCHAT,
     DECLINE_ADVICE,
@@ -94,6 +96,7 @@ def build_answer_messages(question: str, plan: dict, evidence: list, state: Quer
     """
     system = load_prompt(
         "answer_system",
+        today=date.today().isoformat(),
         refuse=REFUSE,
         decline_advice=DECLINE_ADVICE,
         realtime=REALTIME,

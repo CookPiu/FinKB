@@ -151,9 +151,12 @@ def test_fuzzy_match_rescues_variants_but_not_other_objects():
     for mention in ["华夏基金", "华夏的那只基金"]:
         amb = resolve_mentions([mention], auto)
         assert amb["status"] == "ambiguous" and {e["id"] for e in amb["candidates"]} == {"fcf", "bond"}, mention
-    # 只有品牌或行业字样相同的库外对象不能被模糊匹配拉进来；泛指的“货币基金”不能对上货币政策报告
-    for mention in ["易方达蓝筹精选混合", "工商银行", "工商银行股份有限公司", "华夏成长混合", "货币基金"]:
+    # 只有品牌或行业字样相同的库外对象不能被模糊匹配拉进来
+    for mention in ["易方达蓝筹精选混合", "工商银行", "工商银行股份有限公司", "华夏成长混合"]:
         assert resolve_mentions([mention], auto)["status"] == "unknown", mention
+    # 泛指的产品类别与资料类别不是对象：既不能对上货币政策报告或投教资料，也不算库外对象
+    for mention in ["货币基金", "投资者教育资料", "季报"]:
+        assert resolve_mentions([mention], auto)["status"] == "none", mention
 
 
 # ---------- 会话历史：取最近 n 条（旧项目 K-23） ----------

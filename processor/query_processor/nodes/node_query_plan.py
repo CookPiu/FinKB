@@ -6,6 +6,7 @@
 """
 import json
 import re
+from datetime import date
 
 from common.logging.logger import logger, node_log, step_log
 from processor.query_processor.state import QueryGraphState, create_query_default_state
@@ -107,7 +108,7 @@ def build_plan_messages(question: str, history: list, focus_names: list) -> list
         f"当前焦点对象：{focus_text}\n\n"
         f"当前问题：{question}"
     )
-    return [{"role": "system", "content": load_prompt("query_plan")}, {"role": "user", "content": user}]
+    return [{"role": "system", "content": load_prompt("query_plan", today=date.today().isoformat())}, {"role": "user", "content": user}]
 
 
 def build_default_plan(standalone_query: str) -> dict:
